@@ -1,0 +1,11 @@
+node_modules/
+dist/
+result
+result-*
+.direnv/
+.pnpm-store/
+*.log
+
+# local configuration (may contain subscription tokens)
+config.yaml
+config.local.yaml

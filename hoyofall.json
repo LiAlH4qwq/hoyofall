@@ -1,0 +1,659 @@
+{
+  "outbounds": [
+    {
+      "type": "vmess",
+      "tag": "Alink-剩余流量：113.74 GB",
+      "server": "cfn-nrt.cdn.qchwnd.moe",
+      "server_port": 443,
+      "uuid": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "security": "auto",
+      "alter_id": 0,
+      "tls": {
+        "enabled": true,
+        "server_name": "d2eaezcuhxxyxb.cloudfront.net"
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/aln/10?ed=2048",
+        "headers": {
+          "Host": "d2eaezcuhxxyxb.cloudfront.net"
+        }
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "Alink-距离下次重置剩余：27 天",
+      "server": "cfn-nrt.cdn.qchwnd.moe",
+      "server_port": 443,
+      "uuid": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "security": "auto",
+      "alter_id": 0,
+      "tls": {
+        "enabled": true,
+        "server_name": "d2eaezcuhxxyxb.cloudfront.net"
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/aln/10?ed=2048",
+        "headers": {
+          "Host": "d2eaezcuhxxyxb.cloudfront.net"
+        }
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "Alink-套餐到期：2026-10-21",
+      "server": "cfn-nrt.cdn.qchwnd.moe",
+      "server_port": 443,
+      "uuid": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "security": "auto",
+      "alter_id": 0,
+      "tls": {
+        "enabled": true,
+        "server_name": "d2eaezcuhxxyxb.cloudfront.net"
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/aln/10?ed=2048",
+        "headers": {
+          "Host": "d2eaezcuhxxyxb.cloudfront.net"
+        }
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "Alink-欢迎使用 Alink 请设置订阅自动更新",
+      "server": "cfn-nrt.cdn.qchwnd.moe",
+      "server_port": 443,
+      "uuid": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "security": "auto",
+      "alter_id": 0,
+      "tls": {
+        "enabled": true,
+        "server_name": "d2eaezcuhxxyxb.cloudfront.net"
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/aln/10?ed=2048",
+        "headers": {
+          "Host": "d2eaezcuhxxyxb.cloudfront.net"
+        }
+      }
+    },
+    {
+      "type": "trojan",
+      "tag": "Alink-官网 alink.moe233.app 邀请返利50%",
+      "server": "alink.moe233.app",
+      "server_port": 443,
+      "password": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "tls": {
+        "enabled": true
+      }
+    },
+    {
+      "type": "trojan",
+      "tag": "Alink-批量测试可能导致 GFW 干扰连接！！！",
+      "server": "alink.moe233.app",
+      "server_port": 443,
+      "password": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "tls": {
+        "enabled": true
+      }
+    },
+    {
+      "type": "anytls",
+      "tag": "Alink-🇭🇰HK HKBN 1",
+      "server": "m1d76476.edge.0443node.com",
+      "server_port": 443,
+      "password": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "tls": {
+        "enabled": true,
+        "server_name": "moe233-alink-0e74a78d-3f2f-9044-19a4-9e8747517c6f.qchwnd.moe",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ]
+      }
+    },
+    {
+      "type": "anytls",
+      "tag": "Alink-🇭🇰HK HKBN 2",
+      "server": "m2a9afe6.edge.0443node.com",
+      "server_port": 443,
+      "password": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "tls": {
+        "enabled": true,
+        "server_name": "moe233-alink-0e74a78d-3f2f-9044-19a4-9e8747517c6f.qchwnd.moe",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ]
+      }
+    },
+    {
+      "type": "anytls",
+      "tag": "Alink-🇭🇰HK HKT 1",
+      "server": "m1d76476.edge.0443node.com",
+      "server_port": 443,
+      "password": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "tls": {
+        "enabled": true,
+        "server_name": "moe233-alink-ade94d06-447a-b412-040e-069a2cd468fa.qchwnd.moe",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ]
+      }
+    },
+    {
+      "type": "anytls",
+      "tag": "Alink-🇭🇰HK HKT 2",
+      "server": "m2a9afe6.edge.0443node.com",
+      "server_port": 443,
+      "password": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "tls": {
+        "enabled": true,
+        "server_name": "moe233-alink-ade94d06-447a-b412-040e-069a2cd468fa.qchwnd.moe",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ]
+      }
+    },
+    {
+      "type": "anytls",
+      "tag": "Alink-🇭🇰HK Akari",
+      "server": "m1d76476.edge.0443node.com",
+      "server_port": 443,
+      "password": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "tls": {
+        "enabled": true,
+        "server_name": "moe233-alink-e734e841-82c5-0fb5-df8a-371a0e36d85f.qchwnd.moe",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ]
+      }
+    },
+    {
+      "type": "anytls",
+      "tag": "Alink-🇸🇬SG FDC",
+      "server": "m3d95226.edge.0443node.com",
+      "server_port": 443,
+      "password": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "tls": {
+        "enabled": true,
+        "server_name": "moe233-alink-f88ea362-74dc-ea29-4f92-2b026570e1a6.qchwnd.moe",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ]
+      }
+    },
+    {
+      "type": "anytls",
+      "tag": "Alink-🇸🇬SG Akari 1",
+      "server": "m3d95226.edge.0443node.com",
+      "server_port": 443,
+      "password": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "tls": {
+        "enabled": true,
+        "server_name": "moe233-alink-6a13d6f4-28ea-8432-0d5c-8288f351b3a5.qchwnd.moe",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ]
+      }
+    },
+    {
+      "type": "anytls",
+      "tag": "Alink-🇸🇬SG Akari 2",
+      "server": "m3d95226.edge.0443node.com",
+      "server_port": 443,
+      "password": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "tls": {
+        "enabled": true,
+        "server_name": "moe233-alink-b94df10f-7bb1-19cd-31ea-b517ce5c5f43.qchwnd.moe",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ]
+      }
+    },
+    {
+      "type": "anytls",
+      "tag": "Alink-🇯🇵JP Gcore 1",
+      "server": "m5d81a6b.edge.0443node.com",
+      "server_port": 443,
+      "password": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "tls": {
+        "enabled": true,
+        "server_name": "moe233-alink-ece18dd5-06d1-c2fb-f3ca-11b413a9ad5a.qchwnd.moe",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ]
+      }
+    },
+    {
+      "type": "anytls",
+      "tag": "Alink-🇯🇵JP Gcore 2",
+      "server": "m5d81a6b.edge.0443node.com",
+      "server_port": 443,
+      "password": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "tls": {
+        "enabled": true,
+        "server_name": "moe233-alink-f24e41bf-11de-bda5-73ad-57870109ec93.qchwnd.moe",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ]
+      }
+    },
+    {
+      "type": "anytls",
+      "tag": "Alink-🇹🇼TW HiNet 1",
+      "server": "m1d76476.edge.0443node.com",
+      "server_port": 443,
+      "password": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "tls": {
+        "enabled": true,
+        "server_name": "moe233-alink-2a5666a3-d7d4-4499-835f-3a5f86712fcd.qchwnd.moe",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ]
+      }
+    },
+    {
+      "type": "anytls",
+      "tag": "Alink-🇹🇼TW HiNet 2",
+      "server": "m1d76476.edge.0443node.com",
+      "server_port": 443,
+      "password": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "tls": {
+        "enabled": true,
+        "server_name": "moe233-alink-9b8036b0-ef5f-ef98-2a14-eb0eae510e8f.qchwnd.moe",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ]
+      }
+    },
+    {
+      "type": "anytls",
+      "tag": "Alink-🇹🇭TH Siamdata",
+      "server": "m3d95226.edge.0443node.com",
+      "server_port": 443,
+      "password": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "tls": {
+        "enabled": true,
+        "server_name": "moe233-alink-0e2bfe76-e8fa-aed3-3dfb-c2054638e66f.qchwnd.moe",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ]
+      }
+    },
+    {
+      "type": "anytls",
+      "tag": "Alink-🇮🇩ID Herza",
+      "server": "m3d95226.edge.0443node.com",
+      "server_port": 443,
+      "password": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "tls": {
+        "enabled": true,
+        "server_name": "moe233-alink-f16710e1-2a3a-ae9e-33a4-f474ab225153.qchwnd.moe",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ]
+      }
+    },
+    {
+      "type": "anytls",
+      "tag": "Alink-🇰🇷KR Vultr",
+      "server": "m5d81a6b.edge.0443node.com",
+      "server_port": 443,
+      "password": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "tls": {
+        "enabled": true,
+        "server_name": "moe233-alink-d2ca5302-0f7b-8628-1e10-c2317cd04a51.qchwnd.moe",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ]
+      }
+    },
+    {
+      "type": "anytls",
+      "tag": "Alink-🇺🇸US Psychz",
+      "server": "107.149.90.97",
+      "server_port": 443,
+      "password": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "tls": {
+        "enabled": true,
+        "server_name": "moe233-alink-1569eedb-1e15-9085-b5d5-af0bd180daca.qchwnd.moe",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ]
+      }
+    },
+    {
+      "type": "anytls",
+      "tag": "Alink-🇺🇸US ColoCrossing",
+      "server": "107.149.90.97",
+      "server_port": 443,
+      "password": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "tls": {
+        "enabled": true,
+        "server_name": "moe233-alink-4a167046-e508-a644-fc4c-cd8860a758e7.qchwnd.moe",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ]
+      }
+    },
+    {
+      "type": "anytls",
+      "tag": "Alink-🇺🇸US GTT",
+      "server": "107.149.90.98",
+      "server_port": 443,
+      "password": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "tls": {
+        "enabled": true,
+        "server_name": "moe233-alink-a06a4984-b24f-a083-9a4b-ff61376a25e2.qchwnd.moe",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ]
+      }
+    },
+    {
+      "type": "anytls",
+      "tag": "Alink-🇨🇦CA Bytefilter",
+      "server": "107.149.90.98",
+      "server_port": 443,
+      "password": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "tls": {
+        "enabled": true,
+        "server_name": "moe233-alink-8cc53bab-1943-b2e7-77f5-bbfea0944cf8.qchwnd.moe",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ]
+      }
+    },
+    {
+      "type": "anytls",
+      "tag": "Alink-🇬🇧UK OVH",
+      "server": "m1d76476.edge.0443node.com",
+      "server_port": 443,
+      "password": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "tls": {
+        "enabled": true,
+        "server_name": "moe233-alink-1a11c545-5c33-8630-15a2-afc7e6278cf9.qchwnd.moe",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ]
+      }
+    },
+    {
+      "type": "anytls",
+      "tag": "Alink-🇩🇪DE dataforest",
+      "server": "m1d76476.edge.0443node.com",
+      "server_port": 443,
+      "password": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "tls": {
+        "enabled": true,
+        "server_name": "moe233-alink-efc3d5a7-f67f-2582-5955-42316a3a6af2.qchwnd.moe",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ]
+      }
+    },
+    {
+      "type": "anytls",
+      "tag": "Alink-🇫🇷FR AdKyNet",
+      "server": "m1d76476.edge.0443node.com",
+      "server_port": 443,
+      "password": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "tls": {
+        "enabled": true,
+        "server_name": "moe233-alink-d2c7ddc0-3020-acfb-6be1-b19dad5dc8af.qchwnd.moe",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ]
+      }
+    },
+    {
+      "type": "hysteria2",
+      "tag": "Alink-Direct 节点延迟低速率高 部分地区有干扰",
+      "server": "58.152.231.165",
+      "server_port": 3386,
+      "password": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "tls": {
+        "enabled": true,
+        "insecure": true
+      }
+    },
+    {
+      "type": "hysteria2",
+      "tag": "Alink-[DIRECT] 🇭🇰HK HKT",
+      "server": "58.152.231.165",
+      "server_port": 3386,
+      "password": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "tls": {
+        "enabled": true,
+        "insecure": true
+      }
+    },
+    {
+      "type": "hysteria2",
+      "tag": "Alink-[DIRECT] 🇺🇸US ColoCrossing",
+      "server": "104.168.6.134",
+      "server_port": 3386,
+      "password": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "tls": {
+        "enabled": true,
+        "insecure": true
+      }
+    },
+    {
+      "type": "hysteria2",
+      "tag": "Alink-[DIRECT] 🇺🇸US MULTACOM 1",
+      "server": "192.129.235.177",
+      "server_port": 3386,
+      "password": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "tls": {
+        "enabled": true,
+        "insecure": true
+      }
+    },
+    {
+      "type": "anytls",
+      "tag": "Alink-[Direct] 🇺🇸US MULTACOM 2",
+      "server": "163.47.135.191",
+      "server_port": 443,
+      "password": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "tls": {
+        "enabled": true,
+        "server_name": "moe233-alink-aae2abbc-f724-d144-4fee-85b43e358898.qchwnd.moe",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ]
+      }
+    },
+    {
+      "type": "anytls",
+      "tag": "Alink-[Direct] 🇩🇪DE dataforest",
+      "server": "5.231.70.55",
+      "server_port": 443,
+      "password": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "tls": {
+        "enabled": true,
+        "server_name": "moe233-alink-efc3d5a7-f67f-2582-5955-42316a3a6af2.qchwnd.moe",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ]
+      }
+    },
+    {
+      "type": "anytls",
+      "tag": "Alink-[Direct] 🇫🇷FR AdKyNet",
+      "server": "83.150.217.62",
+      "server_port": 443,
+      "password": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "tls": {
+        "enabled": true,
+        "server_name": "moe233-alink-d2c7ddc0-3020-acfb-6be1-b19dad5dc8af.qchwnd.moe",
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ]
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "Alink-CDN 可用性有地区性差异",
+      "server": "cfn.cdn.moe233.org",
+      "server_port": 80,
+      "uuid": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "security": "auto",
+      "alter_id": 0,
+      "transport": {
+        "type": "ws",
+        "path": "/aln/10?ed=2048",
+        "headers": {
+          "Host": "jpm2.edge.233.tw"
+        }
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "Alink-[CloudFront] 🇯🇵JP Gcore",
+      "server": "cfn-nrt.cdn.qchwnd.moe",
+      "server_port": 443,
+      "uuid": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "security": "auto",
+      "alter_id": 0,
+      "tls": {
+        "enabled": true,
+        "server_name": "d2eaezcuhxxyxb.cloudfront.net"
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/aln/10?ed=2048",
+        "headers": {
+          "Host": "d2eaezcuhxxyxb.cloudfront.net"
+        }
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "Alink-[CloudFront] 🇺🇸US ColoCrossing",
+      "server": "cfn-lax.cdn.qchwnd.moe",
+      "server_port": 443,
+      "uuid": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "security": "auto",
+      "alter_id": 0,
+      "tls": {
+        "enabled": true,
+        "server_name": "d8woo64bdfxdl.cloudfront.net"
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/aln/18?ed=2048",
+        "headers": {
+          "Host": "d8woo64bdfxdl.cloudfront.net"
+        }
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "Alink-[CloudFront] 🇨🇦CA Bytefilter",
+      "server": "cfn-lax.cdn.qchwnd.moe",
+      "server_port": 443,
+      "uuid": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "security": "auto",
+      "alter_id": 0,
+      "tls": {
+        "enabled": true,
+        "server_name": "d2eyeotmscglv5.cloudfront.net"
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/aln/49?ed=2048",
+        "headers": {
+          "Host": "d2eyeotmscglv5.cloudfront.net"
+        }
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "Alink-[CloudFront] 🇬🇧UK IOMART",
+      "server": "cfn.cdn.moe233.org",
+      "server_port": 443,
+      "uuid": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "security": "auto",
+      "alter_id": 0,
+      "tls": {
+        "enabled": true,
+        "server_name": "dci2lahgmlrxx.cloudfront.net"
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/aln/27?ed=2048",
+        "headers": {
+          "Host": "dci2lahgmlrxx.cloudfront.net"
+        }
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "Alink-[CloudFront] 🇩🇪DE dataforest",
+      "server": "cfn.cdn.moe233.org",
+      "server_port": 443,
+      "uuid": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "security": "auto",
+      "alter_id": 0,
+      "tls": {
+        "enabled": true,
+        "server_name": "d189h9dh1vhju8.cloudfront.net"
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/aln/41?ed=2048",
+        "headers": {
+          "Host": "d189h9dh1vhju8.cloudfront.net"
+        }
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "Alink-[CloudFront] 🇫🇷FR AdKyNet",
+      "server": "cfn.cdn.moe233.org",
+      "server_port": 443,
+      "uuid": "31188a67-fe1e-43a7-a55a-346f1cc7945c",
+      "security": "auto",
+      "alter_id": 0,
+      "tls": {
+        "enabled": true,
+        "server_name": "d25vebqjczoveb.cloudfront.net"
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/aln/16?ed=2048",
+        "headers": {
+          "Host": "d25vebqjczoveb.cloudfront.net"
+        }
+      }
+    }
+  ]
+}

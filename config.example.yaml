@@ -1,0 +1,86 @@
+# hoyofall example configuration.
+#
+# Copy to config.yaml and edit. `config.yaml` is gitignored so local secrets
+# never get committed. Every option below is annotated with its default value;
+# the same reference (with types) lives in README.md. The JSON Schema is
+# available via `hoyofall --print-schema`.
+
+# ---------------------------------------------------------------------------
+# convert
+# ---------------------------------------------------------------------------
+# Instance-wide conversion options. Default: {} (all fields use their defaults).
+convert:
+  # Emit `direct`/`block` outbounds. Default: false.
+  # Keep this false when the fragment is merged into a base config that already
+  # defines those tags.
+  emitBuiltinOutbounds: false
+  # Placeholders: {sub} = subscription name (or id), {name} = original proxy/group name.
+  # Default: "{sub}-{name}".
+  proxyNameFormat: "{sub}-{name}"
+
+# ---------------------------------------------------------------------------
+# subscriptions (required, at least one)
+# ---------------------------------------------------------------------------
+subscriptions:
+  - # Required, unique, non-empty id.
+    id: example
+    # Optional display name, used for the {sub} placeholder. Default: the id.
+    name: example
+    # One of url / urlEnv is required. Prefer urlEnv to keep tokens out of git:
+    url: https://example.com/subscribe?token=REPLACE_ME
+    # urlEnv: EXAMPLE_SUB_URL
+    # Refresh interval in seconds. Default: 3600.
+    intervalSeconds: 3600
+    # Optional User-Agent header used when fetching. Default: unset.
+    userAgent: clash.meta/v1.19.0
+    # Payload format: auto | clash | base64. Default: auto.
+    format: auto
+    # What to do with unsupported/unparsable proxies and groups: skip | fail.
+    # Default: skip.
+    onUnsupported: skip
+
+    # Per-subscription conversion options. Default: {}.
+    convert:
+      # Convert mihomo proxy-groups into sing-box selector/urltest outbounds.
+      # Default: false (provider groups are usually not useful).
+      includeGroups: false
+      # Mapping for mihomo `fallback` groups: urltest | skip. Default: urltest.
+      fallback: urltest
+      # Mapping for mihomo `load-balance` groups: selector | urltest | skip.
+      # Default: selector.
+      loadBalance: selector
+      # Regexes matched against proxy/group names; matches are dropped.
+      # Default: [].
+      exclude: []
+
+# ---------------------------------------------------------------------------
+# output (optional; at least one of file / http must be enabled)
+# ---------------------------------------------------------------------------
+output:
+  # File output. Default: { enabled: true, mode: aggregate, path: "hoyofall.json",
+  # directory: ".", permissions: "0644", pretty: true }.
+  file:
+    # Default: true.
+    enabled: true
+    # aggregate | per-subscription | both. Default: aggregate.
+    # - aggregate:         one merged { "outbounds": [...] } file (all subscriptions)
+    # - per-subscription:  one <id>.json per subscription, for `sing-box -C`
+    # - both:              write both
+    mode: aggregate
+    # Output file path (aggregate / both). Default: "hoyofall.json".
+    path: /run/hoyofall/fragment.json
+    # Output directory (per-subscription / both). Default: ".".
+    # directory: /run/hoyofall
+    # File mode (octal). Default: "0644".
+    permissions: "0644"
+    # Pretty-print JSON (2-space indent). Default: true.
+    pretty: true
+
+  # Optional HTTP endpoint. Default: { enabled: false, listen: { host: "127.0.0.1", port: 9090 } }.
+  http:
+    # Default: false.
+    enabled: false
+    # Bind address. listen.host default: "127.0.0.1"; listen.port default: 9090.
+    listen:
+      host: 127.0.0.1
+      port: 9090

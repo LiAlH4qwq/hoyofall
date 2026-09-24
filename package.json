@@ -1,0 +1,43 @@
+{
+  "name": "hoyofall",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "mihomo (Clash.Meta) subscription to sing-box outbound fragment converter",
+  "bin": {
+    "hoyofall": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "rolldown -c rolldown.config.ts && node dist/index.js --print-schema > dist/schema.json",
+    "gen:schema": "tsx scripts/gen-schema.ts",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "check:ast": "tsx scripts/check-ast.ts",
+    "lint": "eslint . && tsx scripts/check-ast.ts",
+    "check": "tsc --noEmit && eslint . && tsx scripts/check-ast.ts && vitest run",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@effect/platform": "^0.97.2",
+    "@effect/platform-node": "^0.108.2",
+    "effect": "^3.22.2",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@effect/vitest": "^0.30.0",
+    "@eslint/js": "^9.39.1",
+    "@types/node": "^24.0.0",
+    "eslint": "^9.39.1",
+    "eslint-plugin-functional": "^9.0.2",
+    "rolldown": "^1.2.10",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.48.1",
+    "vitest": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=26"
+  }
+}
