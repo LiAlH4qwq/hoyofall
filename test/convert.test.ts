@@ -47,8 +47,8 @@ const nativeGroups = (
 ): ResolvedSubscription["groups"] => ({
   native: {
     enable,
-    includeRegex: [],
-    excludeRegex: [],
+    includeRegexes: [],
+    excludeRegexes: [],
     fallback: "urltest",
     loadBalance: "selector",
   },

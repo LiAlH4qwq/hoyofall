@@ -77,6 +77,21 @@ output:
     expect(exit._tag).toBe("Failure")
   })
 
+  it("rejects includeSubRegexes on subscription-level groups", () => {
+    const yaml = `
+subscriptions:
+  a:
+    url: https://example.com/sub
+    groups:
+      custom:
+        x:
+          includeSubRegexes: ["^a$"]
+`
+    const config = Effect.runSync(decodeConfig(parse(yaml), "test.yaml"))
+    const exit = Effect.runSyncExit(validateConfig(config))
+    expect(exit._tag).toBe("Failure")
+  })
+
   it("rejects an empty subscriptions map", () => {
     const exit = Effect.runSyncExit(
       decodeConfig(parse("subscriptions: {}\noutput: {}\n"), "test.yaml"),

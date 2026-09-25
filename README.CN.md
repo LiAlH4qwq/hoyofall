@@ -58,7 +58,7 @@ groups:
   custom:
     auto-hk:
       type: urltest
-      includeRegex: ["/HK"]
+      includeRegexes: ["HK"]
 convert:
   emitBuiltinOutbounds: false
   proxyNameFormat: "{sub}-{name}"
@@ -75,10 +75,9 @@ output:
 
 ### `groups`（实例级，推荐）
 
-自定义组可跨所有订阅选择成员。sing-box 无法用正则匹配 `outbounds`，因此 hoyofall 会把
-`includeRegex` / `excludeRegex` / `members` 解析为显式 tag。候选键为 `<sub>/<name>`：
-`<sub>` 是订阅 `name`，`<name>` 是原始代理名、原始 native 组名，或某订阅内自定义组的 id。
-实例级组之间也可用 id 互相引用。实例级组的最终 tag 就是其 id 本身。
+自定义组可跨所有订阅选择成员：分别用正则匹配**订阅名**与**实体名**。sing-box 无法用正则
+匹配 `outbounds`，因此 hoyofall 会把正则与类型化的 `members` 解析为显式 tag。实例级组的
+最终 tag 就是其 id 本身。
 
 | 字段 | 类型 | 默认值 | 说明 |
 |---|---|---|---|
@@ -86,19 +85,30 @@ output:
 | `.type` | `"selector"` \| `"urltest"` | `"selector"` | 组类型。 |
 | `.includeProxies` | boolean | `true` | 是否纳入代理。 |
 | `.includeNativeGroups` | boolean | `false` | 是否纳入已转换的 native 组。 |
-| `.includeCustomGroups` | boolean | `false` | 是否纳入订阅内自定义组与其它实例级组。 |
-| `.includeRegex` | 正则字符串数组 | `[]` | 保留匹配任一正则的候选；空=全部。 |
-| `.excludeRegex` | 正则字符串数组 | `[]` | 丢弃匹配任一正则的候选。 |
-| `.members` | 字符串数组 | `[]` | 显式追加的键（`<sub>/<name>`、组 id 或 `DIRECT`/`REJECT`）。 |
+| `.includeCustomGroups` | boolean | `false` | 是否纳入订阅内自定义组与更早定义的实例级组。 |
+| `.includeSubRegexes` | 正则字符串数组 | `[]` | 保留 `name` 匹配任一正则的订阅；空=全部。 |
+| `.excludeSubRegexes` | 正则字符串数组 | `[]` | 丢弃 `name` 匹配任一正则的订阅。 |
+| `.includeRegexes` | 正则字符串数组 | `[]` | 保留实体名匹配任一正则的候选；空=全部。 |
+| `.excludeRegexes` | 正则字符串数组 | `[]` | 丢弃实体名匹配任一正则的候选。 |
+| `.members` | 类型化引用数组 | `[]` | 精确成员，见下。 |
 | `.includeDirect` | boolean | `false` | 追加 `direct`。 |
 | `.includeBlock` | boolean | `false` | 追加 `block`。 |
 | `.onEmpty` | `"skip"` \| `"fail"` | `"skip"` | 无成员时的行为。 |
-| `.default` | string \| null | `null` | `selector` 的默认成员（键）。 |
+| `.default` | string \| null | `null` | `selector` 的默认成员名。 |
 | `.interruptExistConnections` | boolean | `false` | 映射到 `interrupt_exist_connections`。 |
 | `.url` | string | `"http://www.gstatic.com/generate_204"` | `urltest` 探测地址。 |
 | `.intervalSeconds` | 大于 0 的整数 | `300` | `urltest` 间隔。 |
 | `.tolerance` | 整数 | `50` | `urltest` 容差（毫秒）。 |
 | `.idleTimeoutSeconds` | 大于 0 的整数 | `1800` | `urltest` 空闲超时。 |
+
+`.members` 是带标签的 struct 列表（精确匹配；订阅派生的成员仍受 `includeSubRegexes` 范围约束）：
+
+```yaml
+members:
+  - { type: proxy,       subscription: default, name: "🇭🇰 HK-01" }
+  - { type: nativeGroup, subscription: default, name: "auto" }
+  - { type: customGroup, name: auto-hk }   # 另一个自定义组 id
+```
 
 ### `convert`（实例级）
 
@@ -133,14 +143,14 @@ output:
 ### `subscriptions.<id>.groups`（高级）
 
 订阅内分组用于「只需按单个订阅建组」的少见场景，通常应改用实例级 `groups.custom`。
-匹配使用该订阅的原始名与 id（不带 `<sub>/` 前缀）；自定义组的最终 tag 是对其 id 套用
-`proxyNameFormat`（如 `{sub}-{id}`）。
+匹配使用该订阅的原始名与 id；自定义组的最终 tag 是对其 id 套用 `proxyNameFormat`
+（如 `{sub}-{id}`）。此层级**拒绝** `includeSubRegexes` / `excludeSubRegexes`。
 
 | 字段 | 类型 | 默认值 | 说明 |
 |---|---|---|---|
 | `groups.native.enable` | boolean | `false` | 是否转换订阅自带的 `proxy-groups`。 |
-| `groups.native.includeRegex` | 正则字符串数组 | `[]` | 保留匹配的 native 组名；空=全部。 |
-| `groups.native.excludeRegex` | 正则字符串数组 | `[]` | 丢弃匹配的 native 组名。 |
+| `groups.native.includeRegexes` | 正则字符串数组 | `[]` | 保留匹配的 native 组名；空=全部。 |
+| `groups.native.excludeRegexes` | 正则字符串数组 | `[]` | 丢弃匹配的 native 组名。 |
 | `groups.native.fallback` | `"urltest"` \| `"skip"` | `"urltest"` | mihomo `fallback` 分组的映射。 |
 | `groups.native.loadBalance` | `"selector"` \| `"urltest"` \| `"skip"` | `"selector"` | mihomo `load-balance` 分组的映射。 |
 | `groups.custom.<id>` | object | `{}` | 字段同实例级 `groups.custom.<id>`，但匹配本订阅的名/id，tag 经 `proxyNameFormat` 生成。 |
@@ -259,8 +269,8 @@ in
       convert.emitBuiltinOutbounds = false;   # base 已定义 direct/block
       subscriptions.default = { name = "default"; urlEnv = "SUB_URL"; };
       groups.custom = {
-        "hk-auto" = { type = "urltest"; includeRegex = [ "^default/🇭🇰" ]; };
-        "us-auto" = { type = "urltest"; includeRegex = [ "^default/🇺🇸" ]; };
+        "hk-auto" = { type = "urltest"; includeRegexes = [ "🇭🇰" ]; };
+        "us-auto" = { type = "urltest"; includeRegexes = [ "🇺🇸" ]; };
         # 一个稳定的总选择器，供 sing-box 用 route.final 引用
         proxy = { type = "selector"; includeCustomGroups = true; includeDirect = true; };
       };
@@ -277,14 +287,17 @@ in
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
+      TimeoutStartSec = 180;   # 为下面的等待留足时间
     };
     script = ''
-      install -d -m 0700 -o sing-box -g sing-box /run/sing-box
+      # 不要用 `-o/-g sing-box`：首次激活时该用户可能尚未创建；
+      # sing-box 启动时 systemd 会修正属主。
+      install -d -m 0700 /run/sing-box
       for _ in $(seq 1 120); do
         [ -f ${fragment} ] && break
         sleep 1
       done
-      install -m 0644 -o sing-box -g sing-box ${fragment} ${injected}
+      install -m 0644 ${fragment} ${injected}
     '';
   };
 
@@ -298,7 +311,7 @@ in
     script = ''
       sleep 1
       if [ -f ${fragment} ] && ! cmp -s ${fragment} ${injected}; then
-        install -m 0644 -o sing-box -g sing-box ${fragment} ${injected}
+        install -m 0644 ${fragment} ${injected}
         systemctl restart sing-box.service
       fi
     '';
@@ -334,8 +347,12 @@ in
   用户可读（副本以 `0644` 落在 sing-box 自己的 `0700` 目录内）。
 - `restartTriggers` 是静态的，无法监听运行时文件；真正感知刷新的是 `systemd.paths`
   单元。若不介意延迟更新，可去掉第 3 步，改为手动重启 sing-box。
-- 自定义组若匹配为空会被跳过，静态引用它（如 `default` 选择器里）会让 sing-box 启动
-  失败。请确保被引用的区域非空，或用 `onEmpty = "fail"` 尽早暴露问题。
+- 自定义组若匹配为空会被跳过；推荐用带 `includeDirect = true` 的总组（如上例的
+  `proxy`），只静态引用它的稳定 tag，而不是可能缺失的各区域组。
+- 自定义组可引用**更早定义**（配置顺序在前）的自定义组：请先定义被引用者，再定义引用者。
+- 当订阅链接来自 sops（`urlEnv` + `sops.templates`）时，给服务加
+  `systemd.services.hoyofall-<name>.requires/after = [ "sops-install-secrets.service" ]`，
+  否则首次激活时 `EnvironmentFile` 尚不存在，服务会反复重启。
 
 ## 开发
 

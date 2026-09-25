@@ -63,6 +63,7 @@ export class MissingReferenceError extends Data.TaggedError("MissingReferenceErr
 export class EmptyCustomGroupError extends Data.TaggedError("EmptyCustomGroupError")<{
   readonly scope: string
   readonly group: string
+  readonly samples: ReadonlyArray<string>
 }> {}
 
 export class DuplicateTagError extends Data.TaggedError("DuplicateTagError")<{

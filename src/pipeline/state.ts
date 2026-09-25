@@ -35,6 +35,8 @@ const failureMessage = (
   }
 }
 
+const RequestTimeoutSeconds = 30
+
 const fetchText = (
   subscription: ResolvedSubscription,
 ): Effect.Effect<string, FetchError, HttpClient.HttpClient> =>
@@ -76,7 +78,19 @@ const fetchText = (
           }),
       ),
     )
-  })
+  }).pipe(
+    Effect.timeout(Duration.seconds(RequestTimeoutSeconds)),
+    Effect.mapError((error) =>
+      error._tag === "TimeoutException"
+        ? new FetchError({
+            subscription: subscription.id,
+            url: subscription.url,
+            message: `request timed out after ${RequestTimeoutSeconds}s`,
+            cause: error,
+          })
+        : error,
+    ),
+  )
 
 const logWarnings = (fragment: SubscriptionFragment): Effect.Effect<void> =>
   fragment.warnings.length === 0
@@ -165,7 +179,14 @@ export const snapshotStream = (
       updateStream(subscription, config.convert),
     ),
     { concurrency: "unbounded" },
-  ).pipe(Stream.scan({} as CacheMap, applyUpdate))
+  ).pipe(
+    // `Stream.mapAccum` (unlike `Stream.scan`) does not emit the initial state,
+    // so we never write an empty fragment before the first refresh completes.
+    Stream.mapAccum({} as CacheMap, (cache, update) => {
+      const next = applyUpdate(cache, update)
+      return [next, next] as const
+    }),
+  )
 
 export interface InstanceRuntime {
   readonly pubsub: PubSub.PubSub<CacheMap>
