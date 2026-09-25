@@ -55,9 +55,18 @@ export class GroupDecodeError extends Data.TaggedError("GroupDecodeError")<{
 }> {}
 
 export class MissingReferenceError extends Data.TaggedError("MissingReferenceError")<{
-  readonly subscription: string
+  readonly scope: string
   readonly group: string
   readonly reference: string
+}> {}
+
+export class EmptyCustomGroupError extends Data.TaggedError("EmptyCustomGroupError")<{
+  readonly scope: string
+  readonly group: string
+}> {}
+
+export class DuplicateTagError extends Data.TaggedError("DuplicateTagError")<{
+  readonly tags: ReadonlyArray<string>
 }> {}
 
 export class StrictConversionError extends Data.TaggedError("StrictConversionError")<{
@@ -85,3 +94,4 @@ export type ConversionWarning =
   | ProxyDecodeError
   | GroupDecodeError
   | MissingReferenceError
+  | EmptyCustomGroupError

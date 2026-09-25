@@ -1,5 +1,51 @@
+import type { CustomGroup } from "../config/schema"
 import type { MihomoGroup } from "../mihomo/schema"
 import type { Outbound } from "../singbox/schema"
+
+export interface CustomGroupInput {
+  readonly group: CustomGroup
+  readonly tag: string
+  readonly memberTags: ReadonlyArray<string>
+  readonly defaultTag: string | undefined
+}
+
+export interface CustomGroupConversion {
+  readonly outbound: Outbound | undefined
+  readonly empty: boolean
+}
+
+export const convertCustomGroup = (
+  input: CustomGroupInput,
+): CustomGroupConversion => {
+  const { group, tag, memberTags, defaultTag } = input
+  if (memberTags.length === 0) {
+    return { outbound: undefined, empty: true }
+  }
+  return group.type === "urltest"
+    ? {
+        outbound: {
+          type: "urltest",
+          tag,
+          outbounds: memberTags,
+          url: group.url,
+          interval: `${group.intervalSeconds}s`,
+          tolerance: group.tolerance,
+          idle_timeout: `${group.idleTimeoutSeconds}s`,
+          interrupt_exist_connections: group.interruptExistConnections,
+        },
+        empty: false,
+      }
+    : {
+        outbound: {
+          type: "selector",
+          tag,
+          outbounds: memberTags,
+          default: defaultTag,
+          interrupt_exist_connections: group.interruptExistConnections,
+        },
+        empty: false,
+      }
+}
 
 export interface GroupConvertInput {
   readonly group: MihomoGroup

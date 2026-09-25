@@ -23,8 +23,8 @@ HTTP 提供。
 ## 特性
 
 - 以各自独立的间隔抓取任意数量的 mihomo 订阅链接。
-- 将 `proxies` 转换为 sing-box `outbounds`；当 `includeGroups: true` 时也转换
-  `proxy-groups`（默认关闭）。
+- 将 `proxies` 转换为 sing-box `outbounds`，并可按正则/包含/排除规则（opt-in）或按订阅
+  自带的 `proxy-groups`（`groups.native`，默认关闭）生成 `selector`/`urltest` 组。
 - 重命名最终 outbound tag（默认 `subname-proxyname`）并相应重写分组引用，使多个订阅的
   片段可以合并。
 - 文件输出（默认 `aggregate`，原子 `tmp` + `rename`），可选 `per-subscription` 目录模式
@@ -39,8 +39,10 @@ HTTP 提供。
 代理：`ss`、`vmess`、`vless`、`trojan`、`hysteria`、`hysteria2`、`tuic`、
 `wireguard`、`http`、`socks5`、`anytls`。
 
-分组（仅在 `includeGroups: true` 时）：`select → selector`、`url-test → urltest`、
-`fallback → urltest`、`load-balance → selector`（后两者可配置）。
+分组：由实例级 `groups.custom`（推荐）或订阅内 `groups.custom` 通过正则与显式键从代理/
+组中挑选成员生成（sing-box 无法对 `outbounds` 使用正则）。native 组
+（`groups.native.enable`）映射 `select → selector`、`url-test → urltest`、
+`fallback → urltest`、`load-balance → selector`（可配置）。
 
 其余类型会作为类型化警告记录并跳过（或通过 `onUnsupported: fail` 让整个订阅失败）。
 
@@ -52,21 +54,51 @@ Schema（`hoyofall --print-schema`，随包安装于 `share/hoyofall/schema.json
 权威来源。
 
 ```yaml
+groups:
+  custom:
+    auto-hk:
+      type: urltest
+      includeRegex: ["/HK"]
 convert:
   emitBuiltinOutbounds: false
   proxyNameFormat: "{sub}-{name}"
 subscriptions:
-  - id: airport
+  airport:
     urlEnv: AIRPORT_URL
     intervalSeconds: 3600
-    convert:
-      includeGroups: false
 output:
   file:
     enabled: true
     mode: aggregate
     path: /run/hoyofall/fragment.json
 ```
+
+### `groups`（实例级，推荐）
+
+自定义组可跨所有订阅选择成员。sing-box 无法用正则匹配 `outbounds`，因此 hoyofall 会把
+`includeRegex` / `excludeRegex` / `members` 解析为显式 tag。候选键为 `<sub>/<name>`：
+`<sub>` 是订阅 `name`，`<name>` 是原始代理名、原始 native 组名，或某订阅内自定义组的 id。
+实例级组之间也可用 id 互相引用。实例级组的最终 tag 就是其 id 本身。
+
+| 字段 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `groups.custom.<id>` | object | `{}` | 一个自定义组；`<id>` 即最终 outbound tag。 |
+| `.type` | `"selector"` \| `"urltest"` | `"selector"` | 组类型。 |
+| `.includeProxies` | boolean | `true` | 是否纳入代理。 |
+| `.includeNativeGroups` | boolean | `false` | 是否纳入已转换的 native 组。 |
+| `.includeCustomGroups` | boolean | `false` | 是否纳入订阅内自定义组与其它实例级组。 |
+| `.includeRegex` | 正则字符串数组 | `[]` | 保留匹配任一正则的候选；空=全部。 |
+| `.excludeRegex` | 正则字符串数组 | `[]` | 丢弃匹配任一正则的候选。 |
+| `.members` | 字符串数组 | `[]` | 显式追加的键（`<sub>/<name>`、组 id 或 `DIRECT`/`REJECT`）。 |
+| `.includeDirect` | boolean | `false` | 追加 `direct`。 |
+| `.includeBlock` | boolean | `false` | 追加 `block`。 |
+| `.onEmpty` | `"skip"` \| `"fail"` | `"skip"` | 无成员时的行为。 |
+| `.default` | string \| null | `null` | `selector` 的默认成员（键）。 |
+| `.interruptExistConnections` | boolean | `false` | 映射到 `interrupt_exist_connections`。 |
+| `.url` | string | `"http://www.gstatic.com/generate_204"` | `urltest` 探测地址。 |
+| `.intervalSeconds` | 大于 0 的整数 | `300` | `urltest` 间隔。 |
+| `.tolerance` | 整数 | `50` | `urltest` 容差（毫秒）。 |
+| `.idleTimeoutSeconds` | 大于 0 的整数 | `1800` | `urltest` 空闲超时。 |
 
 ### `convert`（实例级）
 
@@ -76,28 +108,42 @@ output:
 | `convert.emitBuiltinOutbounds` | boolean | `false` | 是否输出 `direct`/`block` outbound。合并进已定义它们的 base 配置时保持 `false`。 |
 | `convert.proxyNameFormat` | string | `"{sub}-{name}"` | 最终 outbound tag 的模板。`{sub}` = 订阅 `name`（或 `id`），`{name}` = 原始代理/分组名。 |
 
-### `subscriptions[]`（必填，至少一个）
+### `subscriptions.<id>`（映射，必填，至少一个）
+
+映射的键即订阅 id，同时也是默认显示名与 `proxyNameFormat` 中 `{sub}` 的取值。
 
 | 字段 | 类型 | 默认值 | 说明 |
 |---|---|---|---|
-| `subscriptions[].id` | 非空字符串 | —（必填） | 订阅的唯一 id。 |
-| `subscriptions[].name` | 非空字符串 | 等于 `id` | 用于 `{sub}` 的显示名。 |
-| `subscriptions[].url` | 非空字符串 | — | 订阅链接。`url` 与 `urlEnv` 必须恰好设置一个。 |
-| `subscriptions[].urlEnv` | 非空字符串 | — | 存放链接的环境变量名（避免 token 写入文件）。 |
-| `subscriptions[].intervalSeconds` | 大于 0 的整数 | `3600` | 刷新间隔。 |
-| `subscriptions[].userAgent` | string | 未设置 | 抓取时使用的 `User-Agent`。 |
-| `subscriptions[].format` | `"auto"` \| `"clash"` \| `"base64"` | `"auto"` | 载荷格式；`auto` 会自动识别 base64。 |
-| `subscriptions[].onUnsupported` | `"skip"` \| `"fail"` | `"skip"` | 对不支持/无法解析项是跳过（并警告）还是让整个订阅失败。 |
-| `subscriptions[].convert` | object | `{}` | 每订阅的转换选项（见下）。 |
+| `subscriptions.<id>.name` | 非空字符串 | 键本身 | 用于 `{sub}` 的显示名。 |
+| `subscriptions.<id>.url` | 非空字符串 | — | 订阅链接。`url` 与 `urlEnv` 必须恰好设置一个。 |
+| `subscriptions.<id>.urlEnv` | 非空字符串 | — | 存放链接的环境变量名（避免 token 写入文件）。 |
+| `subscriptions.<id>.intervalSeconds` | 大于 0 的整数 | `3600` | 刷新间隔。 |
+| `subscriptions.<id>.userAgent` | string | 未设置 | 抓取时使用的 `User-Agent`。 |
+| `subscriptions.<id>.format` | `"auto"` \| `"clash"` \| `"base64"` | `"auto"` | 载荷格式；`auto` 会自动识别 base64。 |
+| `subscriptions.<id>.onUnsupported` | `"skip"` \| `"fail"` | `"skip"` | 对不支持/无法解析项是跳过（并警告）还是让整个订阅失败。 |
+| `subscriptions.<id>.convert` | object | `{}` | 代理过滤（见下）。 |
+| `subscriptions.<id>.groups` | object | `{}` | 高级的订阅内分组（见下）。 |
 
-### `subscriptions[].convert`
+### `subscriptions.<id>.convert`
 
 | 字段 | 类型 | 默认值 | 说明 |
 |---|---|---|---|
-| `includeGroups` | boolean | `false` | 是否把 mihomo `proxy-groups` 转为 sing-box `selector`/`urltest`。默认关闭，因为供应商的分组通常没有价值。 |
-| `fallback` | `"urltest"` \| `"skip"` | `"urltest"` | mihomo `fallback` 分组的映射。 |
-| `loadBalance` | `"selector"` \| `"urltest"` \| `"skip"` | `"selector"` | mihomo `load-balance` 分组的映射。 |
-| `exclude` | 正则字符串数组 | `[]` | 名称匹配任一正则的项会被丢弃。 |
+| `exclude` | 正则字符串数组 | `[]` | 丢弃原始名匹配任一正则的代理。 |
+
+### `subscriptions.<id>.groups`（高级）
+
+订阅内分组用于「只需按单个订阅建组」的少见场景，通常应改用实例级 `groups.custom`。
+匹配使用该订阅的原始名与 id（不带 `<sub>/` 前缀）；自定义组的最终 tag 是对其 id 套用
+`proxyNameFormat`（如 `{sub}-{id}`）。
+
+| 字段 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `groups.native.enable` | boolean | `false` | 是否转换订阅自带的 `proxy-groups`。 |
+| `groups.native.includeRegex` | 正则字符串数组 | `[]` | 保留匹配的 native 组名；空=全部。 |
+| `groups.native.excludeRegex` | 正则字符串数组 | `[]` | 丢弃匹配的 native 组名。 |
+| `groups.native.fallback` | `"urltest"` \| `"skip"` | `"urltest"` | mihomo `fallback` 分组的映射。 |
+| `groups.native.loadBalance` | `"selector"` \| `"urltest"` \| `"skip"` | `"selector"` | mihomo `load-balance` 分组的映射。 |
+| `groups.custom.<id>` | object | `{}` | 字段同实例级 `groups.custom.<id>`，但匹配本订阅的名/id，tag 经 `proxyNameFormat` 生成。 |
 
 ### `output`（可选；`file` / `http` 至少启用一个）
 
@@ -129,7 +175,8 @@ HTTP 端点（当 `output.http.enabled` 时）：
 
 - `GET /` —— 实例元信息
 - `GET /health`
-- `GET /sub/:id` —— `{ "outbounds": [...] }`
+- `GET /outbounds` —— 完整组装片段（含实例级组，并附带 `warnings` 数组）
+- `GET /sub/:id` —— `{ "outbounds": [...] }`（仅该订阅）
 - `GET /sub/:id/raw` —— 仅 `outbounds` 数组
 
 ### 配合 sing-box 使用片段
@@ -157,9 +204,10 @@ sing-box merge merged.json -c base.json -c /run/hoyofall/fragment.json
   imports = [ inputs.hoyofall.nixosModules.default ];
   services.hoyofall.instances.default = {
     settings = {
-      subscriptions = [
-        { id = "airport"; urlEnv = "AIRPORT_URL"; intervalSeconds = 3600; }
-      ];
+      subscriptions.airport = {
+        urlEnv = "AIRPORT_URL";
+        intervalSeconds = 3600;
+      };
       # output.file.path / directory 默认指向
       # /run/hoyofall-default/hoyofall.json 与 /run/hoyofall-default
     };
@@ -180,6 +228,114 @@ sing-box merge merged.json -c base.json -c /run/hoyofall/fragment.json
 `WorkingDirectory`，并且默认是唯一可写路径。若要把输出指到别处，请显式设置
 `output.file.path` / `output.file.directory`，并把该目录加入 `extraReadWritePaths`。
 使用 `configFile` 时模块无法注入这些默认值，需要自行设置。
+
+### 注入到 `services.sing-box`
+
+nixpkgs 的 `services.sing-box` 模块以
+`sing-box -D $STATE_DIRECTORY -C $RUNTIME_DIRECTORY run` 启动，其中
+`RuntimeDirectory = "sing-box"`（即 `/run/sing-box`），并由 `ExecStartPre` 把
+`settings` 写成 `/run/sing-box/config.json`。`-C` 会读取该目录下**所有**顶层
+`*.json` 并合并——**对象按键覆盖、数组追加**——因此把 hoyofall 片段放进该目录，其
+`outbounds` 就会追加到 `settings` 的 outbounds 之后。
+
+由于 `services.sing-box.settings` 是静态 Nix，可直接按名字引用生成出来的 tag（求值期即已
+确定）；把动态部分都留在片段的分组里。sing-box 只在启动时读配置，因此用一个 systemd
+path 单元在 hoyofall 刷新后重新注入并重启。
+
+> `systemd.services.<name>.preStart` 以服务的 `User`（`sing-box`）身份运行，**无法**读取
+> hoyofall 的 `0700` `RuntimeDirectory`。注入必须由一个 root oneshot（不设 `User =`）
+> 完成，并以 `Before=sing-box.service` 排序。
+
+```nix
+{ config, pkgs, lib, ... }:
+let
+  fragment = "/run/hoyofall-default/hoyofall.json";   # hoyofall 模块默认路径
+  injected = "/run/sing-box/zz-hoyofall.json";
+in
+{
+  # 1. hoyofall 产出片段（见上面的模块示例）
+  services.hoyofall.instances.default = {
+    settings = {
+      convert.emitBuiltinOutbounds = false;   # base 已定义 direct/block
+      subscriptions.default = { name = "default"; urlEnv = "SUB_URL"; };
+      groups.custom = {
+        "hk-auto" = { type = "urltest"; includeRegex = [ "^default/🇭🇰" ]; };
+        "us-auto" = { type = "urltest"; includeRegex = [ "^default/🇺🇸" ]; };
+        # 一个稳定的总选择器，供 sing-box 用 route.final 引用
+        proxy = { type = "selector"; includeCustomGroups = true; includeDirect = true; };
+      };
+    };
+    environmentFile = "/run/secrets/hoyofall-default.env";
+  };
+
+  # 2. root oneshot：在 sing-box 启动前注入片段
+  systemd.services.hoyofall-inject-singbox = {
+    wants = [ "hoyofall-default.service" ];
+    after = [ "hoyofall-default.service" ];
+    before = [ "sing-box.service" ];
+    requiredBy = [ "sing-box.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script = ''
+      install -d -m 0700 -o sing-box -g sing-box /run/sing-box
+      for _ in $(seq 1 120); do
+        [ -f ${fragment} ] && break
+        sleep 1
+      done
+      install -m 0644 -o sing-box -g sing-box ${fragment} ${injected}
+    '';
+  };
+
+  # 保留 runtime dir，使注入的文件在重启后仍存在
+  systemd.services.sing-box.serviceConfig.RuntimeDirectoryPreserve = "yes";
+
+  # 3. hoyofall 刷新后重新注入并重启（cmp 用于避免抖动）
+  systemd.services.hoyofall-singbox-refresh = {
+    serviceConfig.Type = "oneshot";
+    path = [ pkgs.diffutils ];   # 提供 cmp
+    script = ''
+      sleep 1
+      if [ -f ${fragment} ] && ! cmp -s ${fragment} ${injected}; then
+        install -m 0644 -o sing-box -g sing-box ${fragment} ${injected}
+        systemctl restart sing-box.service
+      fi
+    '';
+  };
+  systemd.paths.hoyofall-singbox-refresh = {
+    wantedBy = [ "multi-user.target" ];
+    after = [ "hoyofall-default.service" ];
+    pathConfig.PathChanged = "/run/hoyofall-default";
+  };
+
+  # 4. 原生 sing-box 配置；只引用来自片段的 tag
+  services.sing-box = {
+    enable = true;
+    settings = {
+      inbounds = [ { type = "mixed"; tag = "mixed-in"; listen = "127.0.0.1"; listen_port = 7890; } ];
+      outbounds = [
+        { type = "direct"; tag = "direct"; }
+        { type = "block"; tag = "block"; }
+      ];
+      route.final = "proxy";   # 由 hoyofall 片段提供
+    };
+  };
+}
+```
+
+注意：
+
+- 保持 `convert.emitBuiltinOutbounds = false`（默认）：base `settings` 已定义
+  `direct`/`block`，重复 tag 会让 sing-box 报错。
+- 在片段生成之前引用某个 tag（如 `route.final = "proxy"`）会让 sing-box 启动失败；
+  注入 oneshot 会等待片段、并由 `requiredBy` 把住 `sing-box.service`。
+- 片段含代理凭据；`/run/sing-box` 与 `/run/hoyofall-default` 均为 `0700`，只有两个服务
+  用户可读（副本以 `0644` 落在 sing-box 自己的 `0700` 目录内）。
+- `restartTriggers` 是静态的，无法监听运行时文件；真正感知刷新的是 `systemd.paths`
+  单元。若不介意延迟更新，可去掉第 3 步，改为手动重启 sing-box。
+- 自定义组若匹配为空会被跳过，静态引用它（如 `default` 选择器里）会让 sing-box 启动
+  失败。请确保被引用的区域非空，或用 `onEmpty = "fail"` 尽早暴露问题。
 
 ## 开发
 

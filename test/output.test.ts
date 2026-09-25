@@ -3,7 +3,14 @@ import { NodeContext } from "@effect/platform-node"
 import { it, scoped } from "@effect/vitest"
 import { Effect } from "effect"
 import { describe, expect } from "vitest"
+import type { ResolvedConfig, ResolvedSubscription } from "../src/config/load"
 import type { Output } from "../src/config/schema"
+import {
+  defaultNativeGroupOptions,
+  type ConvertOptions,
+  type InstanceGroups,
+} from "../src/config/schema"
+import type { SubscriptionFragment } from "../src/convert/fragment"
 import { writeSnapshot } from "../src/output/file"
 import { applyUpdate } from "../src/pipeline/state"
 import type { CacheMap } from "../src/pipeline/types"
@@ -13,7 +20,7 @@ describe("applyUpdate", () => {
     const ready: CacheMap = {
       a: {
         _tag: "Ready",
-        fragment: { outbounds: [{ type: "direct", tag: "direct" }] },
+        conversion: conversion(),
         warnings: [],
         updatedAt: 1,
         lastError: undefined,
@@ -39,29 +46,74 @@ describe("applyUpdate", () => {
   })
 })
 
-const baseOutput = (overrides: Partial<Output["file"]>): Output => ({
-  file: {
-    enabled: true,
-    mode: "aggregate",
-    directory: ".",
-    path: "hoyofall.json",
-    permissions: "0644",
-    pretty: true,
-    ...overrides,
-  },
-  http: { enabled: false, listen: { host: "127.0.0.1", port: 9090 } },
+const nodeOutbound = {
+  type: "shadowsocks" as const,
+  tag: "sub-node",
+  server: "1.1.1.1",
+  server_port: 8388,
+  method: "aes-256-gcm",
+  password: "pass",
+}
+
+const conversion = (): SubscriptionFragment => ({
+  subscriptionId: "a",
+  subscriptionName: "sub",
+  fragment: { outbounds: [nodeOutbound] },
+  warnings: [],
+  proxies: [{ original: "node", tag: "sub-node" }],
+  nativeGroups: [],
+  customGroups: [],
 })
 
-const cache: CacheMap = {
+const subscription: ResolvedSubscription = {
+  id: "a",
+  name: "sub",
+  url: "https://example.com/sub",
+  intervalSeconds: 3600,
+  userAgent: undefined,
+  format: "auto",
+  onUnsupported: "skip",
+  convert: { exclude: [] },
+  groups: { native: defaultNativeGroupOptions, custom: {} },
+}
+
+const makeConfig = (file: Partial<Output["file"]>): ResolvedConfig => {
+  const convert: ConvertOptions = {
+    emitBuiltinOutbounds: false,
+    proxyNameFormat: "{sub}-{name}",
+  }
+  const groups: InstanceGroups = { custom: {} }
+  return {
+    subscriptions: [subscription],
+    convert,
+    groups,
+    output: {
+      file: {
+        enabled: true,
+        mode: "aggregate",
+        directory: ".",
+        path: "hoyofall.json",
+        permissions: "0644",
+        pretty: true,
+        ...file,
+      },
+      http: { enabled: false, listen: { host: "127.0.0.1", port: 9090 } },
+    },
+  }
+}
+
+const cache = (): CacheMap => ({
   a: {
     _tag: "Ready",
-    fragment: {
-      outbounds: [{ type: "direct", tag: "direct" }],
-    },
+    conversion: conversion(),
     warnings: [],
     updatedAt: 0,
     lastError: undefined,
   },
+})
+
+interface Serialized {
+  readonly outbounds: ReadonlyArray<unknown>
 }
 
 describe("writeSnapshot", () => {
@@ -70,12 +122,11 @@ describe("writeSnapshot", () => {
       const fs = yield* FileSystem.FileSystem
       const dir = yield* fs.makeTempDirectoryScoped()
       const path = `${dir}/fragment.json`
-      yield* writeSnapshot(baseOutput({ path }), false, ["a"], cache)
-      const raw = yield* fs.readFileString(path)
-      const parsed = JSON.parse(raw) as {
-        readonly outbounds: ReadonlyArray<unknown>
-      }
-      expect(parsed.outbounds).toEqual([{ type: "direct", tag: "direct" }])
+      yield* writeSnapshot(makeConfig({ path }), cache())
+      const parsed = JSON.parse(
+        yield* fs.readFileString(path),
+      ) as Serialized
+      expect(parsed.outbounds).toEqual([nodeOutbound])
     }).pipe(Effect.provide(NodeContext.layer)),
   )
 
@@ -84,16 +135,13 @@ describe("writeSnapshot", () => {
       const fs = yield* FileSystem.FileSystem
       const dir = yield* fs.makeTempDirectoryScoped()
       yield* writeSnapshot(
-        baseOutput({ mode: "per-subscription", directory: dir }),
-        false,
-        ["a"],
-        cache,
+        makeConfig({ mode: "per-subscription", directory: dir }),
+        cache(),
       )
-      const raw = yield* fs.readFileString(`${dir}/a.json`)
-      const parsed = JSON.parse(raw) as {
-        readonly outbounds: ReadonlyArray<unknown>
-      }
-      expect(parsed.outbounds).toEqual([{ type: "direct", tag: "direct" }])
+      const parsed = JSON.parse(
+        yield* fs.readFileString(`${dir}/a.json`),
+      ) as Serialized
+      expect(parsed.outbounds).toEqual([nodeOutbound])
     }).pipe(Effect.provide(NodeContext.layer)),
   )
 
@@ -102,15 +150,21 @@ describe("writeSnapshot", () => {
       const fs = yield* FileSystem.FileSystem
       const dir = yield* fs.makeTempDirectoryScoped()
       const path = `${dir}/fragment.json`
-      yield* writeSnapshot(baseOutput({ path }), true, ["a"], cache)
-      const raw = yield* fs.readFileString(path)
-      const parsed = JSON.parse(raw) as {
-        readonly outbounds: ReadonlyArray<unknown>
-      }
+      const config = makeConfig({ path })
+      yield* writeSnapshot(
+        {
+          ...config,
+          convert: { ...config.convert, emitBuiltinOutbounds: true },
+        },
+        cache(),
+      )
+      const parsed = JSON.parse(
+        yield* fs.readFileString(path),
+      ) as Serialized
       expect(parsed.outbounds).toEqual([
         { type: "direct", tag: "direct" },
         { type: "block", tag: "block" },
-        { type: "direct", tag: "direct" },
+        nodeOutbound,
       ])
     }).pipe(Effect.provide(NodeContext.layer)),
   )

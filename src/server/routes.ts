@@ -1,7 +1,8 @@
 import { HttpRouter, HttpServerResponse } from "@effect/platform"
-import { Effect, PubSub, Queue } from "effect"
+import { Effect, Exit, PubSub, Queue } from "effect"
 import type { ResolvedConfig } from "../config/load"
-import { withBuiltinOutbounds } from "../convert/fragment"
+import { assembleFragment, withBuiltinOutbounds } from "../convert/fragment"
+import { warningMessage } from "../convert/fragment"
 import type { CacheMap } from "../pipeline/types"
 
 const loadSnapshot = (
@@ -18,6 +19,16 @@ export const makeRouter = (
   pubsub: PubSub.PubSub<CacheMap>,
 ) => {
   const snapshot = loadSnapshot(pubsub)
+
+  const collectConversions = (
+    cache: CacheMap,
+  ) =>
+    config.subscriptions.flatMap((subscription) => {
+      const state = cache[subscription.id]
+      return state !== undefined && state._tag === "Ready"
+        ? [state.conversion]
+        : []
+    })
 
   const subscriptionHandler = (raw: boolean) =>
     Effect.gen(function* () {
@@ -38,7 +49,7 @@ export const makeRouter = (
         )
       }
       const fragment = withBuiltinOutbounds(
-        state.fragment,
+        state.conversion.fragment,
         config.convert.emitBuiltinOutbounds,
       )
       return HttpServerResponse.unsafeJson(
@@ -46,6 +57,24 @@ export const makeRouter = (
         { status: 200, contentType: "application/json" },
       )
     })
+
+  const outboundsHandler = Effect.gen(function* () {
+    const cache = yield* snapshot
+    const exit = yield* Effect.exit(
+      assembleFragment(config, collectConversions(cache)),
+    )
+    if (Exit.isFailure(exit)) {
+      return HttpServerResponse.unsafeJson(
+        { error: "failed to assemble outbounds" },
+        { status: 500 },
+      )
+    }
+    const warnings = exit.value.warnings.map(warningMessage)
+    return HttpServerResponse.unsafeJson(
+      { ...exit.value.fragment, warnings },
+      { status: 200, contentType: "application/json" },
+    )
+  })
 
   return HttpRouter.empty.pipe(
     HttpRouter.get(
@@ -67,6 +96,7 @@ export const makeRouter = (
         HttpServerResponse.unsafeJson({ status: "ok" }, { status: 200 }),
       ),
     ),
+    HttpRouter.get("/outbounds", outboundsHandler),
     HttpRouter.get("/sub/:id", subscriptionHandler(false)),
     HttpRouter.get("/sub/:id/raw", subscriptionHandler(true)),
   )

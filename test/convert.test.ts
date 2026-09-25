@@ -42,6 +42,19 @@ proxy-groups:
     proxies: ["auto", "DIRECT"]
 `
 
+const nativeGroups = (
+  enable: boolean,
+): ResolvedSubscription["groups"] => ({
+  native: {
+    enable,
+    includeRegex: [],
+    excludeRegex: [],
+    fallback: "urltest",
+    loadBalance: "selector",
+  },
+  custom: {},
+})
+
 const subscription: ResolvedSubscription = {
   id: "airport",
   name: "sub",
@@ -51,11 +64,9 @@ const subscription: ResolvedSubscription = {
   format: "auto",
   onUnsupported: "skip",
   convert: {
-    includeGroups: true,
-    fallback: "urltest",
-    loadBalance: "selector",
     exclude: [],
   },
+  groups: nativeGroups(true),
 }
 
 describe("convertSubscription", () => {
@@ -103,10 +114,7 @@ describe("convertSubscription", () => {
 
   it("omits groups by default", () => {
     const decoded = Effect.runSync(decodeSubscription("airport", fixture, "auto"))
-    const withoutGroups = {
-      ...subscription,
-      convert: { ...subscription.convert, includeGroups: false },
-    }
+    const withoutGroups = { ...subscription, groups: nativeGroups(false) }
     const result = Effect.runSync(
       convertSubscription(withoutGroups, decoded, {
         emitBuiltinOutbounds: false,
