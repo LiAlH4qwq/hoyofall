@@ -13,9 +13,11 @@
 # ---------------------------------------------------------------------------
 # groups (instance-level, recommended)
 # ---------------------------------------------------------------------------
-# Custom groups select members across all subscriptions by the `<sub>/<name>`
-# key (subscription name / original proxy or group name). The group id is used
-# as the final outbound tag verbatim.
+# Custom groups select members by matching the subscription name and the entity
+# name separately:
+#   includeSubRegexes/excludeSubRegexes  filter subscriptions by `name`
+#   includeRegexes/excludeRegexes        filter entity names (proxy/group/group id)
+# Empty regex lists mean "all". The group id is the final outbound tag verbatim.
 groups:
   custom:
     # A urltest group of every Hong Kong node from any subscription.
@@ -24,17 +26,26 @@ groups:
       includeProxies: true                # Default: true
       includeNativeGroups: false          # Default: false
       includeCustomGroups: false          # Default: false
-      includeRegex: ["/HK"]               # empty = all. Default: []
-      excludeRegex: []                    # Default: []
-      members: []                         # explicit <sub>/<name> or group id. Default: []
+      includeSubRegexes: []               # match subscription name; [] = all. Default: []
+      excludeSubRegexes: []               # Default: []
+      includeRegexes: ["HK"]              # match entity name; [] = all. Default: []
+      excludeRegexes: []                  # Default: []
+      members: []                         # typed refs, see below. Default: []
       includeDirect: false                # Default: false
       includeBlock: false                 # Default: false
       onEmpty: skip                       # skip | fail. Default: skip
+      default: null                       # selector default member name. Default: null
       url: http://www.gstatic.com/generate_204   # urltest only
       intervalSeconds: 300                # urltest only. Default: 300
       tolerance: 50                       # urltest only. Default: 50
       idleTimeoutSeconds: 1800            # urltest only. Default: 1800
       interruptExistConnections: false    # Default: false
+    # Typed members (all optional). `subscription` is the subscription `name`.
+    # pick:
+    #   members:
+    #     - { type: proxy, subscription: example, name: "HK-01" }
+    #     - { type: nativeGroup, subscription: example, name: "auto" }
+    #     - { type: customGroup, name: auto-hk }   # another custom group id
 
 # ---------------------------------------------------------------------------
 # convert (instance-wide)
@@ -71,23 +82,24 @@ subscriptions:
       exclude: []
 
     # Advanced: per-subscription groups. Most users only need instance-level
-    # `groups.custom` above.
+    # `groups.custom` above. `includeSubRegexes`/`excludeSubRegexes` are rejected
+    # here (the scope is already one subscription).
     groups:
       native:                       # the proxy-groups shipped by the subscription
         enable: false               # Default: false
-        includeRegex: []            # empty = all. Default: []
-        excludeRegex: []            # Default: []
+        includeRegexes: []          # empty = all. Default: []
+        excludeRegexes: []          # Default: []
         fallback: urltest           # urltest | skip. Default: urltest
         loadBalance: selector      # selector | urltest | skip. Default: selector
       custom:
         hk:
           type: selector
-          includeRegex: ["HK|香港"]   # matches original names within this subscription
-          excludeRegex: []
-          # same options as instance-level groups (includeProxies, members,
-          # includeNativeGroups, includeCustomGroups, includeDirect, includeBlock,
-          # default, interruptExistConnections, onEmpty, url, intervalSeconds,
-          # tolerance, idleTimeoutSeconds)
+          includeRegexes: ["HK|香港"]   # matches original names within this subscription
+          excludeRegexes: []
+          # same options as instance-level groups except the *SubRegexes fields
+          # (includeProxies, members, includeNativeGroups, includeCustomGroups,
+          # includeDirect, includeBlock, default, interruptExistConnections,
+          # onEmpty, url, intervalSeconds, tolerance, idleTimeoutSeconds)
 
 # ---------------------------------------------------------------------------
 # output (optional; at least one of file / http must be enabled)

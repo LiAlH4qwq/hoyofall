@@ -64,32 +64,31 @@ const convert = (
   )
 
 describe("per-subscription custom groups", () => {
-  it("selects proxies by includeRegex", () => {
+  it("selects proxies by includeRegexes", () => {
     const result = convert(
       subscription("sub", {
         native: defaultNativeGroupOptions,
-        custom: { hk: customGroup({ includeRegex: ["^HK"] }) },
+        custom: { hk: customGroup({ includeRegexes: ["^HK"] }) },
       }),
       fixture,
     )
-    const group = result.fragment.outbounds.find(
-      (outbound) => outbound.tag === "sub-hk",
-    )
-    expect(group).toMatchObject({
+    expect(
+      result.fragment.outbounds.find((outbound) => outbound.tag === "sub-hk"),
+    ).toMatchObject({
       type: "selector",
       tag: "sub-hk",
       outbounds: ["sub-HK-1", "sub-HK-2"],
     })
   })
 
-  it("honours excludeRegex and urltest options", () => {
+  it("honours excludeRegexes and urltest options", () => {
     const result = convert(
       subscription("sub", {
         native: defaultNativeGroupOptions,
         custom: {
           all: customGroup({
             type: "urltest",
-            excludeRegex: ["^US"],
+            excludeRegexes: ["^US"],
             url: "http://test",
             intervalSeconds: 120,
             tolerance: 10,
@@ -110,14 +109,18 @@ describe("per-subscription custom groups", () => {
     })
   })
 
-  it("supports explicit members and direct/block", () => {
+  it("supports typed members and direct/block", () => {
     const result = convert(
       subscription("sub", {
-        native: defaultNativeGroupOptions,
+        native: { ...defaultNativeGroupOptions, enable: true },
         custom: {
           pick: customGroup({
             includeProxies: false,
-            members: ["HK-1", "DIRECT"],
+            members: [
+              { type: "proxy", subscription: "sub", name: "HK-1" },
+              { type: "nativeGroup", subscription: "sub", name: "auto" },
+            ],
+            includeDirect: true,
             includeBlock: true,
           }),
         },
@@ -128,7 +131,7 @@ describe("per-subscription custom groups", () => {
       result.fragment.outbounds.find((outbound) => outbound.tag === "sub-pick"),
     ).toMatchObject({
       type: "selector",
-      outbounds: ["sub-HK-1", "direct", "block"],
+      outbounds: ["sub-HK-1", "sub-auto", "direct", "block"],
     })
   })
 
@@ -138,85 +141,139 @@ describe("per-subscription custom groups", () => {
         native: {
           ...defaultNativeGroupOptions,
           enable: true,
-          includeRegex: ["^auto$"],
+          includeRegexes: ["^auto$"],
           fallback: "skip",
         },
         custom: {},
       }),
       fixture,
     )
-    const tags = result.fragment.outbounds.map((outbound) => outbound.tag)
-    expect(tags).toEqual(["sub-HK-1", "sub-HK-2", "sub-US-1", "sub-auto"])
+    expect(result.fragment.outbounds.map((outbound) => outbound.tag)).toEqual([
+      "sub-HK-1",
+      "sub-HK-2",
+      "sub-US-1",
+      "sub-auto",
+    ])
   })
 
-  it("warns and skips an empty custom group", () => {
+  it("warns and skips an empty custom group, listing candidates", () => {
     const result = convert(
       subscription("sub", {
         native: defaultNativeGroupOptions,
-        custom: { none: customGroup({ includeRegex: ["^ZZZ"] }) },
+        custom: { none: customGroup({ includeRegexes: ["^ZZZ"] }) },
       }),
       fixture,
     )
     expect(result.fragment.outbounds.map((outbound) => outbound.tag)).not.toContain(
       "sub-none",
     )
-    expect(result.warnings.map((warning) => warning._tag)).toContain(
-      "EmptyCustomGroupError",
+    const warning = result.warnings.find(
+      (candidate) => candidate._tag === "EmptyCustomGroupError",
     )
+    expect(warning).toMatchObject({
+      _tag: "EmptyCustomGroupError",
+      samples: ["HK-1", "HK-2", "US-1"],
+    })
   })
 })
 
 describe("instance-level custom groups", () => {
   const instanceConfig = (
     custom: InstanceGroups["custom"],
-    subOverrides: ReadonlyArray<ResolvedSubscription> = [],
+    subscriptions: ReadonlyArray<ResolvedSubscription> = [
+      subscription("a", noGroups),
+      subscription("b", noGroups),
+    ],
     emitBuiltinOutbounds = false,
-  ): ResolvedConfig => {
-    const bookings = subOverrides.length > 0
-      ? subOverrides
-      : [
-          subscription("a", noGroups),
-          subscription("b", noGroups),
-        ]
-    return {
-      subscriptions: bookings,
-      convert: { emitBuiltinOutbounds, proxyNameFormat: "{sub}-{name}" },
-      groups: { custom },
-      output: {
-        file: {
-          enabled: true,
-          mode: "aggregate",
-          directory: ".",
-          path: "hoyofall.json",
-          permissions: "0644",
-          pretty: true,
-        },
-        http: { enabled: false, listen: { host: "127.0.0.1", port: 9090 } },
+  ): ResolvedConfig => ({
+    subscriptions,
+    convert: { emitBuiltinOutbounds, proxyNameFormat: "{sub}-{name}" },
+    groups: { custom },
+    output: {
+      file: {
+        enabled: true,
+        mode: "aggregate",
+        directory: ".",
+        path: "hoyofall.json",
+        permissions: "0644",
+        pretty: true,
       },
-    }
-  }
+      http: { enabled: false, listen: { host: "127.0.0.1", port: 9090 } },
+    },
+  })
 
-  it("matches across subscriptions with <sub>/<name> and uses the id as tag", () => {
+  it("matches across subscriptions by proxy name", () => {
     const a = convert(subscription("a", noGroups), fixture)
     const b = convert(subscription("b", noGroups), fixture)
     const config = instanceConfig({
-      hk: customGroup({ includeRegex: ["^a/HK-1$", "^b/HK-2$"] }),
+      hk: customGroup({ includeRegexes: ["HK-1", "HK-2"] }),
     })
     const assembled = Effect.runSync(assembleFragment(config, [a, b]))
-    const group = assembled.fragment.outbounds.find(
-      (outbound) => outbound.tag === "hk",
-    )
-    expect(group).toMatchObject({
+    expect(
+      assembled.fragment.outbounds.find((outbound) => outbound.tag === "hk"),
+    ).toMatchObject({
       type: "selector",
       tag: "hk",
-      outbounds: ["a-HK-1", "b-HK-2"],
+      outbounds: ["a-HK-1", "a-HK-2", "b-HK-1", "b-HK-2"],
     })
+  })
+
+  it("filters by subscription with includeSubRegexes", () => {
+    const a = convert(subscription("a", noGroups), fixture)
+    const b = convert(subscription("b", noGroups), fixture)
+    const config = instanceConfig({
+      hk: customGroup({
+        includeSubRegexes: ["^a$"],
+        includeRegexes: ["^HK"],
+      }),
+    })
+    const assembled = Effect.runSync(assembleFragment(config, [a, b]))
+    expect(
+      assembled.fragment.outbounds.find((outbound) => outbound.tag === "hk"),
+    ).toMatchObject({ outbounds: ["a-HK-1", "a-HK-2"] })
+  })
+
+  it("resolves typed members across subscriptions", () => {
+    const a = convert(subscription("a", noGroups), fixture)
+    const b = convert(subscription("b", noGroups), fixture)
+    const config = instanceConfig({
+      pick: customGroup({
+        includeProxies: false,
+        members: [
+          { type: "proxy", subscription: "a", name: "HK-1" },
+          { type: "proxy", subscription: "b", name: "US-1" },
+        ],
+      }),
+    })
+    const assembled = Effect.runSync(assembleFragment(config, [a, b]))
+    expect(
+      assembled.fragment.outbounds.find((outbound) => outbound.tag === "pick"),
+    ).toMatchObject({ outbounds: ["a-HK-1", "b-US-1"] })
+  })
+
+  it("does not reference empty custom groups from later groups", () => {
+    const a = convert(subscription("a", noGroups), fixture)
+    const config = instanceConfig({
+      "hk-auto": customGroup({ includeRegexes: ["^ZZZ"] }), // matches nothing
+      proxy: customGroup({
+        includeProxies: false,
+        includeCustomGroups: true,
+        includeDirect: true,
+      }),
+    })
+    const assembled = Effect.runSync(assembleFragment(config, [a]))
+    expect(assembled.fragment.outbounds.map((outbound) => outbound.tag)).not.toContain(
+      "hk-auto",
+    )
+    expect(
+      assembled.fragment.outbounds.find((outbound) => outbound.tag === "proxy"),
+    ).toMatchObject({ type: "selector", outbounds: ["direct"] })
   })
 
   it("includes builtins when requested", () => {
     const a = convert(subscription("a", noGroups), fixture)
     const config = instanceConfig(
-      { auto: customGroup({ includeRegex: ["^a/HK"] }) },
+      { auto: customGroup({ includeRegexes: ["^HK"] }) },
       [subscription("a", noGroups)],
       true,
     )
@@ -239,7 +296,9 @@ describe("instance-level custom groups", () => {
         ),
       )
     const config = instanceConfig({})
-    const exit = Effect.runSyncExit(assembleFragment(config, [make("a"), make("b")]))
+    const exit = Effect.runSyncExit(
+      assembleFragment(config, [make("a"), make("b")]),
+    )
     expect(Exit.isFailure(exit)).toBe(true)
   })
 })

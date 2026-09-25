@@ -42,7 +42,7 @@ export const validateConfig = (
 
     const instanceGroupIssues = yield* Effect.all(
       Object.entries(config.groups.custom).map(([id, group]) =>
-        customGroupIssues("groups", id, group),
+        customGroupIssues("groups", id, group, true),
       ),
     )
 
@@ -81,12 +81,31 @@ const customGroupIssues = (
   scope: string,
   id: string,
   group: CustomGroup,
+  allowSubRegexes: boolean,
 ): Effect.Effect<ReadonlyArray<string>> =>
   Effect.gen(function* () {
     const label = `${scope}.custom.${id}`
-    const includeIssues = yield* regexIssues(`${label}.includeRegex`, group.includeRegex)
-    const excludeIssues = yield* regexIssues(`${label}.excludeRegex`, group.excludeRegex)
-    return [...includeIssues, ...excludeIssues]
+    const regexFields: ReadonlyArray<readonly [string, ReadonlyArray<string>]> =
+      [
+        ["includeSubRegexes", group.includeSubRegexes],
+        ["excludeSubRegexes", group.excludeSubRegexes],
+        ["includeRegexes", group.includeRegexes],
+        ["excludeRegexes", group.excludeRegexes],
+      ]
+    const regexIssueLists = yield* Effect.all(
+      regexFields.map(([field, patterns]) =>
+        regexIssues(`${label}.${field}`, patterns),
+      ),
+    )
+    const subIssue =
+      !allowSubRegexes &&
+      (group.includeSubRegexes.length > 0 ||
+        group.excludeSubRegexes.length > 0)
+        ? [
+            `${label}: includeSubRegexes/excludeSubRegexes are only valid for instance-level groups`,
+          ]
+        : []
+    return [...regexIssueLists.flat(), ...subIssue]
   })
 
 const subscriptionIssuesOf = (
@@ -105,17 +124,17 @@ const subscriptionIssuesOf = (
     )
     const nativeIssues = yield* Effect.all([
       regexIssues(
-        `subscriptions.${id}.groups.native.includeRegex`,
-        subscription.groups.native.includeRegex,
+        `subscriptions.${id}.groups.native.includeRegexes`,
+        subscription.groups.native.includeRegexes,
       ),
       regexIssues(
-        `subscriptions.${id}.groups.native.excludeRegex`,
-        subscription.groups.native.excludeRegex,
+        `subscriptions.${id}.groups.native.excludeRegexes`,
+        subscription.groups.native.excludeRegexes,
       ),
     ])
     const customIssues = yield* Effect.all(
       Object.entries(subscription.groups.custom).map(([groupId, group]) =>
-        customGroupIssues(`subscriptions.${id}.groups`, groupId, group),
+        customGroupIssues(`subscriptions.${id}.groups`, groupId, group, false),
       ),
     )
     return [

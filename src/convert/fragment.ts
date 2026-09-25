@@ -1,6 +1,6 @@
 import { Effect } from "effect"
 import type { ResolvedConfig, ResolvedSubscription } from "../config/load"
-import type { ConvertOptions, CustomGroup } from "../config/schema"
+import type { ConvertOptions, CustomGroup, MemberRef } from "../config/schema"
 import {
   DuplicateTagError,
   EmptyCustomGroupError,
@@ -47,31 +47,89 @@ export const formatTag = (
   template.replaceAll("{sub}", subscriptionName).replaceAll("{name}", name)
 
 interface Candidate {
-  readonly key: string
+  readonly subscription: string
+  readonly name: string
   readonly tag: string
 }
+
+const InstanceSubscription = ""
 
 const matchesAny = (
   patterns: ReadonlyArray<string>,
   value: string,
 ): boolean => patterns.some((pattern) => new RegExp(pattern).test(value))
 
-const dedupe = (tags: ReadonlyArray<string>): ReadonlyArray<string> =>
-  tags.filter((tag, index) => tags.indexOf(tag) === index)
+const dedupe = (values: ReadonlyArray<string>): ReadonlyArray<string> =>
+  values.filter((value, index) => values.indexOf(value) === index)
 
-const selectByRegex = (
+const filterBySubscription = (
   candidates: ReadonlyArray<Candidate>,
-  includeRegex: ReadonlyArray<string>,
-  excludeRegex: ReadonlyArray<string>,
-): ReadonlyArray<string> =>
-  candidates
-    .filter(
-      (candidate) =>
-        (includeRegex.length === 0 ||
-          matchesAny(includeRegex, candidate.key)) &&
-        !matchesAny(excludeRegex, candidate.key),
-    )
-    .map((candidate) => candidate.tag)
+  includeSubRegexes: ReadonlyArray<string>,
+  excludeSubRegexes: ReadonlyArray<string>,
+): ReadonlyArray<Candidate> =>
+  candidates.filter(
+    (candidate) =>
+      candidate.subscription === InstanceSubscription ||
+      ((includeSubRegexes.length === 0 ||
+        matchesAny(includeSubRegexes, candidate.subscription)) &&
+        !matchesAny(excludeSubRegexes, candidate.subscription)),
+  )
+
+const selectCandidates = (
+  candidates: ReadonlyArray<Candidate>,
+  includeRegexes: ReadonlyArray<string>,
+  excludeRegexes: ReadonlyArray<string>,
+): ReadonlyArray<Candidate> =>
+  candidates.filter(
+    (candidate) =>
+      (includeRegexes.length === 0 ||
+        matchesAny(includeRegexes, candidate.name)) &&
+      !matchesAny(excludeRegexes, candidate.name),
+  )
+
+const tagsOf = (candidates: ReadonlyArray<Candidate>): ReadonlyArray<string> =>
+  candidates.map((candidate) => candidate.tag)
+
+const resolveMemberTags = (
+  member: MemberRef,
+  proxyCandidates: ReadonlyArray<Candidate>,
+  nativeCandidates: ReadonlyArray<Candidate>,
+  customCandidates: ReadonlyArray<Candidate>,
+): ReadonlyArray<string> => {
+  switch (member.type) {
+    case "proxy":
+      return tagsOf(
+        proxyCandidates.filter(
+          (candidate) =>
+            candidate.subscription === member.subscription &&
+            candidate.name === member.name,
+        ),
+      )
+    case "nativeGroup":
+      return tagsOf(
+        nativeCandidates.filter(
+          (candidate) =>
+            candidate.subscription === member.subscription &&
+            candidate.name === member.name,
+        ),
+      )
+    case "customGroup":
+      return tagsOf(
+        customCandidates.filter((candidate) => candidate.name === member.name),
+      )
+  }
+}
+
+const describeMember = (member: MemberRef): string => {
+  switch (member.type) {
+    case "proxy":
+      return `proxy ${member.subscription}/${member.name}`
+    case "nativeGroup":
+      return `nativeGroup ${member.subscription}/${member.name}`
+    case "customGroup":
+      return `customGroup ${member.name}`
+  }
+}
 
 export const warningMessage = (warning: ConversionWarning): string => {
   switch (warning._tag) {
@@ -85,8 +143,13 @@ export const warningMessage = (warning: ConversionWarning): string => {
       return `subscription ${warning.subscription}: group ${warning.group} failed to decode: ${warning.issues.join("; ")}`
     case "MissingReferenceError":
       return `${warning.scope}: group ${warning.group} references unknown outbound ${warning.reference}`
-    case "EmptyCustomGroupError":
-      return `${warning.scope}: custom group ${warning.group} matched no outbounds`
+    case "EmptyCustomGroupError": {
+      const samples =
+        warning.samples.length === 0
+          ? ""
+          : ` (candidates: ${warning.samples.map((name) => JSON.stringify(name)).join(", ")})`
+      return `${warning.scope}: custom group ${warning.group} matched no outbounds${samples}`
+    }
   }
 }
 
@@ -98,7 +161,6 @@ interface BuildCustomGroupArgs {
   readonly proxyCandidates: ReadonlyArray<Candidate>
   readonly nativeCandidates: ReadonlyArray<Candidate>
   readonly customCandidates: ReadonlyArray<Candidate>
-  readonly resolveReference: (name: string) => string | undefined
 }
 
 interface BuiltCustomGroup {
@@ -110,50 +172,89 @@ interface BuiltCustomGroup {
 
 const buildCustomGroup = (args: BuildCustomGroupArgs): BuiltCustomGroup => {
   const { group } = args
-  const customCandidates = args.customCandidates.filter(
-    (candidate) => candidate.key !== args.id,
+
+  const proxyPool = group.includeProxies
+    ? filterBySubscription(
+        args.proxyCandidates,
+        group.includeSubRegexes,
+        group.excludeSubRegexes,
+      )
+    : []
+  const nativePool = group.includeNativeGroups
+    ? filterBySubscription(
+        args.nativeCandidates,
+        group.includeSubRegexes,
+        group.excludeSubRegexes,
+      )
+    : []
+  const customPool = group.includeCustomGroups ? args.customCandidates : []
+
+  const proxySelected = selectCandidates(
+    proxyPool,
+    group.includeRegexes,
+    group.excludeRegexes,
   )
+  const nativeSelected = selectCandidates(
+    nativePool,
+    group.includeRegexes,
+    group.excludeRegexes,
+  )
+  const customSelected = selectCandidates(
+    customPool,
+    group.includeRegexes,
+    group.excludeRegexes,
+  )
+
+  const memberResolutions = group.members.map((member) => ({
+    member,
+    tags: resolveMemberTags(
+      member,
+      args.proxyCandidates,
+      args.nativeCandidates,
+      args.customCandidates,
+    ),
+  }))
+
   const selected = dedupe([
-    ...(group.includeProxies
-      ? selectByRegex(args.proxyCandidates, group.includeRegex, group.excludeRegex)
-      : []),
-    ...(group.includeNativeGroups
-      ? selectByRegex(args.nativeCandidates, group.includeRegex, group.excludeRegex)
-      : []),
-    ...(group.includeCustomGroups
-      ? selectByRegex(customCandidates, group.includeRegex, group.excludeRegex)
-      : []),
-    ...group.members.flatMap((name) => {
-      const tag = args.resolveReference(name)
-      return tag === undefined ? [] : [tag]
-    }),
+    ...tagsOf(proxySelected),
+    ...tagsOf(nativeSelected),
+    ...tagsOf(customSelected),
+    ...memberResolutions.flatMap((resolution) => resolution.tags),
     ...(group.includeDirect ? ["direct"] : []),
     ...(group.includeBlock ? ["block"] : []),
   ])
 
-  const referenceWarnings: ReadonlyArray<ConversionWarning> = [
-    ...group.members.flatMap((name) =>
-      args.resolveReference(name) === undefined
+  const referenceWarnings: ReadonlyArray<ConversionWarning> =
+    memberResolutions.flatMap((resolution) =>
+      resolution.tags.length === 0
         ? [
             new MissingReferenceError({
               scope: args.scope,
               group: args.id,
-              reference: name,
+              reference: describeMember(resolution.member),
             }),
           ]
         : [],
-    ),
-  ]
+    )
 
+  const selectedCandidates = [
+    ...proxySelected,
+    ...nativeSelected,
+    ...customSelected,
+  ]
   const defaultTag =
-    group.default === null ? undefined : args.resolveReference(group.default)
+    group.default === null
+      ? undefined
+      : selectedCandidates.find(
+          (candidate) => candidate.name === group.default,
+        )?.tag
   const defaultWarnings: ReadonlyArray<ConversionWarning> =
     group.default !== null && defaultTag === undefined
       ? [
           new MissingReferenceError({
             scope: args.scope,
             group: args.id,
-            reference: group.default,
+            reference: `default ${group.default}`,
           }),
         ]
       : []
@@ -174,9 +275,15 @@ const buildCustomGroup = (args: BuildCustomGroupArgs): BuiltCustomGroup => {
     }
   }
 
+  const samples = dedupe(
+    [...proxyPool, ...nativePool, ...customPool].map(
+      (candidate) => candidate.name,
+    ),
+  ).slice(0, 5)
   const emptyError = new EmptyCustomGroupError({
     scope: args.scope,
     group: args.id,
+    samples,
   })
   return {
     outbound: undefined,
@@ -184,6 +291,20 @@ const buildCustomGroup = (args: BuildCustomGroupArgs): BuiltCustomGroup => {
     warnings: [...referenceWarnings, ...defaultWarnings, emptyError],
     error: group.onEmpty === "fail" ? emptyError : undefined,
   }
+}
+
+interface CustomGroupAccumulator {
+  readonly outbounds: ReadonlyArray<Outbound>
+  readonly entries: ReadonlyArray<TagEntry>
+  readonly warnings: ReadonlyArray<ConversionWarning>
+  readonly hardFail: boolean
+}
+
+const emptyCustomAccumulator: CustomGroupAccumulator = {
+  outbounds: [],
+  entries: [],
+  warnings: [],
+  hardFail: false,
 }
 
 export const convertSubscription = (
@@ -219,9 +340,9 @@ export const convertSubscription = (
     ? grouped.filter(
         (group) =>
           !isExcluded(group.name) &&
-          (native.includeRegex.length === 0 ||
-            matchesAny(native.includeRegex, group.name)) &&
-          !matchesAny(native.excludeRegex, group.name),
+          (native.includeRegexes.length === 0 ||
+            matchesAny(native.includeRegexes, group.name)) &&
+          !matchesAny(native.excludeRegexes, group.name),
       )
     : []
 
@@ -236,20 +357,20 @@ export const convertSubscription = (
     tag: formatTag(format, subscription.name, group.name),
   }))
 
-  const nameMap = new Map<string, string>(
+  const baseNameMap = new Map<string, string>(
     [...proxies, ...nativeEntries].map((entry) => [entry.original, entry.tag]),
   )
-
-  const resolve = (reference: string): string | undefined =>
-    nameMap.get(reference) ??
-    (Object.hasOwn(BuiltinTags, reference) ? BuiltinTags[reference] : undefined)
 
   const nativeConversions = keptGroups.map((group) => ({
     group,
     conversion: convertGroup({
       group,
       tag: formatTag(format, subscription.name, group.name),
-      resolve,
+      resolve: (reference: string) =>
+        baseNameMap.get(reference) ??
+        (Object.hasOwn(BuiltinTags, reference)
+          ? BuiltinTags[reference]
+          : undefined),
       fallback: native.fallback,
       loadBalance: native.loadBalance,
     }),
@@ -267,46 +388,52 @@ export const convertSubscription = (
       ),
     )
 
-  const customIds = Object.keys(subscription.groups.custom)
-  const customEntries: ReadonlyArray<TagEntry> = customIds.map((id) => ({
-    original: id,
-    tag: formatTag(format, subscription.name, id),
-  }))
-
-  const fullNameMap = new Map<string, string>(
-    [...proxies, ...nativeEntries, ...customEntries].map((entry) => [
-      entry.original,
-      entry.tag,
-    ]),
-  )
-  const resolveFull = (reference: string): string | undefined =>
-    fullNameMap.get(reference) ??
-    (Object.hasOwn(BuiltinTags, reference) ? BuiltinTags[reference] : undefined)
-
   const proxyCandidates: ReadonlyArray<Candidate> = proxies.map((entry) => ({
-    key: entry.original,
+    subscription: subscription.name,
+    name: entry.original,
     tag: entry.tag,
   }))
   const nativeCandidates: ReadonlyArray<Candidate> = nativeEntries.map(
-    (entry) => ({ key: entry.original, tag: entry.tag }),
-  )
-  const customCandidates: ReadonlyArray<Candidate> = customEntries.map(
-    (entry) => ({ key: entry.original, tag: entry.tag }),
+    (entry) => ({
+      subscription: subscription.name,
+      name: entry.original,
+      tag: entry.tag,
+    }),
   )
 
-  const builtCustomGroups = Object.entries(subscription.groups.custom).map(
-    ([id, group]) =>
-      buildCustomGroup({
-        scope: `subscriptions.${subscription.id}`,
-        id,
-        tag: formatTag(format, subscription.name, id),
-        group,
-        proxyCandidates,
-        nativeCandidates,
-        customCandidates,
-        resolveReference: resolveFull,
-      }),
-  )
+  const built =
+    Object.entries(subscription.groups.custom).reduce<CustomGroupAccumulator>(
+      (accumulator, [id, group]) => {
+        const customCandidates: ReadonlyArray<Candidate> =
+          accumulator.entries.map((entry) => ({
+            subscription: subscription.name,
+            name: entry.original,
+            tag: entry.tag,
+          }))
+        const result = buildCustomGroup({
+          scope: `subscriptions.${subscription.id}`,
+          id,
+          tag: formatTag(format, subscription.name, id),
+          group,
+          proxyCandidates,
+          nativeCandidates,
+          customCandidates,
+        })
+        return {
+          outbounds:
+            result.outbound === undefined
+              ? accumulator.outbounds
+              : [...accumulator.outbounds, result.outbound],
+          entries:
+            result.entry === undefined
+              ? accumulator.entries
+              : [...accumulator.entries, result.entry],
+          warnings: [...accumulator.warnings, ...result.warnings],
+          hardFail: accumulator.hardFail || result.error !== undefined,
+        }
+      },
+      emptyCustomAccumulator,
+    )
 
   const nativeWithOutbounds = nativeConversions.filter(
     ({ conversion }) => conversion.outbound !== undefined,
@@ -317,9 +444,6 @@ export const convertSubscription = (
       tag: formatTag(format, subscription.name, group.name),
     }),
   )
-  const customKept: ReadonlyArray<TagEntry> = builtCustomGroups.flatMap(
-    (built) => (built.entry === undefined ? [] : [built.entry]),
-  )
 
   const proxyOutbounds: ReadonlyArray<Outbound> = keptProxies.map((proxy) =>
     convertProxy(proxy, formatTag(format, subscription.name, proxy.name)),
@@ -328,19 +452,17 @@ export const convertSubscription = (
     ({ conversion }) =>
       conversion.outbound === undefined ? [] : [conversion.outbound],
   )
-  const customOutbounds: ReadonlyArray<Outbound> = builtCustomGroups.flatMap(
-    (built) => (built.outbound === undefined ? [] : [built.outbound]),
-  )
 
   const warnings: ReadonlyArray<ConversionWarning> = [
     ...decodeWarnings,
     ...missingWarnings,
-    ...builtCustomGroups.flatMap((built) => built.warnings),
+    ...built.warnings,
   ]
 
-  const hardFail = builtCustomGroups.some((built) => built.error !== undefined)
-
-  if (hardFail || (subscription.onUnsupported === "fail" && warnings.length > 0)) {
+  if (
+    built.hardFail ||
+    (subscription.onUnsupported === "fail" && warnings.length > 0)
+  ) {
     return Effect.fail(
       new StrictConversionError({
         subscription: subscription.id,
@@ -353,88 +475,99 @@ export const convertSubscription = (
     subscriptionId: subscription.id,
     subscriptionName: subscription.name,
     fragment: {
-      outbounds: [...proxyOutbounds, ...nativeOutbounds, ...customOutbounds],
+      outbounds: [...proxyOutbounds, ...nativeOutbounds, ...built.outbounds],
     },
     warnings,
     proxies,
     nativeGroups: nativeKept,
-    customGroups: customKept,
+    customGroups: built.entries,
   })
+}
+
+interface InstanceAccumulator {
+  readonly outbounds: ReadonlyArray<Outbound>
+  readonly emitted: ReadonlyArray<Candidate>
+  readonly warnings: ReadonlyArray<ConversionWarning>
+  readonly error: EmptyCustomGroupError | undefined
+}
+
+const emptyInstanceAccumulator: InstanceAccumulator = {
+  outbounds: [],
+  emitted: [],
+  warnings: [],
+  error: undefined,
 }
 
 export const assembleFragment = (
   config: ResolvedConfig,
   fragments: ReadonlyArray<SubscriptionFragment>,
 ): Effect.Effect<AssembledFragment, DuplicateTagError | EmptyCustomGroupError> => {
-  const instanceIds = Object.keys(config.groups.custom)
-
   const proxyCandidates: ReadonlyArray<Candidate> = fragments.flatMap(
     (fragment) =>
       fragment.proxies.map((entry) => ({
-        key: `${fragment.subscriptionName}/${entry.original}`,
+        subscription: fragment.subscriptionName,
+        name: entry.original,
         tag: entry.tag,
       })),
   )
   const nativeCandidates: ReadonlyArray<Candidate> = fragments.flatMap(
     (fragment) =>
       fragment.nativeGroups.map((entry) => ({
-        key: `${fragment.subscriptionName}/${entry.original}`,
+        subscription: fragment.subscriptionName,
+        name: entry.original,
         tag: entry.tag,
       })),
   )
-  const subscriptionCustomCandidates: ReadonlyArray<Candidate> = fragments.flatMap(
-    (fragment) =>
+  const subscriptionCustomCandidates: ReadonlyArray<Candidate> =
+    fragments.flatMap((fragment) =>
       fragment.customGroups.map((entry) => ({
-        key: `${fragment.subscriptionName}/${entry.original}`,
+        subscription: fragment.subscriptionName,
+        name: entry.original,
         tag: entry.tag,
       })),
-  )
-  const instanceCandidates: ReadonlyArray<Candidate> = instanceIds.map((id) => ({
-    key: id,
-    tag: id,
-  }))
+    )
 
-  const nameMap = new Map<string, string>(
-    [
-      ...proxyCandidates,
-      ...nativeCandidates,
-      ...subscriptionCustomCandidates,
-      ...instanceCandidates,
-    ].map((candidate) => [candidate.key, candidate.tag]),
-  )
-  const resolve = (reference: string): string | undefined =>
-    nameMap.get(reference) ??
-    (Object.hasOwn(BuiltinTags, reference) ? BuiltinTags[reference] : undefined)
-
-  const built = Object.entries(config.groups.custom).map(([id, group]) => ({
-    id,
-    built: buildCustomGroup({
-      scope: "groups",
-      id,
-      tag: id,
-      group,
-      proxyCandidates,
-      nativeCandidates,
-      customCandidates: [...subscriptionCustomCandidates, ...instanceCandidates],
-      resolveReference: resolve,
-    }),
-  }))
-
-  const emptyError = built
-    .map(({ built: result }) => result.error)
-    .find((error) => error !== undefined)
-
-  const warnings: ReadonlyArray<ConversionWarning> = built.flatMap(
-    ({ built: result }) => result.warnings,
-  )
-
-  const instanceOutbounds: ReadonlyArray<Outbound> = built.flatMap(
-    ({ built: result }) => (result.outbound === undefined ? [] : [result.outbound]),
+  const built = Object.entries(config.groups.custom).reduce<InstanceAccumulator>(
+    (accumulator, [id, group]) => {
+      const customCandidates: ReadonlyArray<Candidate> = [
+        ...subscriptionCustomCandidates,
+        ...accumulator.emitted,
+      ]
+      const result = buildCustomGroup({
+        scope: "groups",
+        id,
+        tag: id,
+        group,
+        proxyCandidates,
+        nativeCandidates,
+        customCandidates,
+      })
+      return {
+        outbounds:
+          result.outbound === undefined
+            ? accumulator.outbounds
+            : [...accumulator.outbounds, result.outbound],
+        emitted:
+          result.entry === undefined
+            ? accumulator.emitted
+            : [
+                ...accumulator.emitted,
+                {
+                  subscription: InstanceSubscription,
+                  name: id,
+                  tag: id,
+                },
+              ],
+        warnings: [...accumulator.warnings, ...result.warnings],
+        error: accumulator.error ?? result.error,
+      }
+    },
+    emptyInstanceAccumulator,
   )
 
   const baseOutbounds: ReadonlyArray<Outbound> = [
     ...fragments.flatMap((fragment) => fragment.fragment.outbounds),
-    ...instanceOutbounds,
+    ...built.outbounds,
   ]
   const outbounds: ReadonlyArray<Outbound> = config.convert.emitBuiltinOutbounds
     ? [
@@ -445,16 +578,18 @@ export const assembleFragment = (
     : baseOutbounds
 
   const tags = outbounds.map((outbound) => outbound.tag)
-  const duplicates = dedupe(tags.filter((tag, index) => tags.indexOf(tag) !== index))
+  const duplicates = dedupe(
+    tags.filter((tag, index) => tags.indexOf(tag) !== index),
+  )
 
-  if (emptyError !== undefined) {
-    return Effect.fail(emptyError)
+  if (built.error !== undefined) {
+    return Effect.fail(built.error)
   }
   if (duplicates.length > 0) {
     return Effect.fail(new DuplicateTagError({ tags: duplicates }))
   }
 
-  return Effect.succeed({ fragment: { outbounds }, warnings })
+  return Effect.succeed({ fragment: { outbounds }, warnings: built.warnings })
 }
 
 export const withBuiltinOutbounds = (

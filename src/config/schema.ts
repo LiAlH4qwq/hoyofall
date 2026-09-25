@@ -5,6 +5,30 @@ export const ProxyNameFormatDefault = "{sub}-{name}"
 export const GroupType = Schema.Literal("selector", "urltest")
 export type GroupType = typeof GroupType.Type
 
+export const ProxyMember = Schema.Struct({
+  type: Schema.Literal("proxy"),
+  subscription: Schema.NonEmptyString,
+  name: Schema.NonEmptyString,
+})
+
+export const NativeGroupMember = Schema.Struct({
+  type: Schema.Literal("nativeGroup"),
+  subscription: Schema.NonEmptyString,
+  name: Schema.NonEmptyString,
+})
+
+export const CustomGroupMember = Schema.Struct({
+  type: Schema.Literal("customGroup"),
+  name: Schema.NonEmptyString,
+})
+
+export const MemberRef = Schema.Union(
+  ProxyMember,
+  NativeGroupMember,
+  CustomGroupMember,
+)
+export type MemberRef = typeof MemberRef.Type
+
 export const CustomGroup = Schema.Struct({
   type: Schema.optionalWith(GroupType, { default: () => "selector" as const }),
   includeProxies: Schema.optionalWith(Schema.Boolean, { default: () => true }),
@@ -14,14 +38,20 @@ export const CustomGroup = Schema.Struct({
   includeCustomGroups: Schema.optionalWith(Schema.Boolean, {
     default: () => false,
   }),
-  includeRegex: Schema.optionalWith(Schema.Array(Schema.String), {
+  includeSubRegexes: Schema.optionalWith(Schema.Array(Schema.String), {
     default: () => [] as ReadonlyArray<string>,
   }),
-  excludeRegex: Schema.optionalWith(Schema.Array(Schema.String), {
+  excludeSubRegexes: Schema.optionalWith(Schema.Array(Schema.String), {
     default: () => [] as ReadonlyArray<string>,
   }),
-  members: Schema.optionalWith(Schema.Array(Schema.String), {
+  includeRegexes: Schema.optionalWith(Schema.Array(Schema.String), {
     default: () => [] as ReadonlyArray<string>,
+  }),
+  excludeRegexes: Schema.optionalWith(Schema.Array(Schema.String), {
+    default: () => [] as ReadonlyArray<string>,
+  }),
+  members: Schema.optionalWith(Schema.Array(MemberRef), {
+    default: () => [] as ReadonlyArray<MemberRef>,
   }),
   includeDirect: Schema.optionalWith(Schema.Boolean, { default: () => false }),
   includeBlock: Schema.optionalWith(Schema.Boolean, { default: () => false }),
@@ -57,10 +87,10 @@ export type CustomGroups = typeof CustomGroups.Type
 
 export const NativeGroupOptions = Schema.Struct({
   enable: Schema.optionalWith(Schema.Boolean, { default: () => false }),
-  includeRegex: Schema.optionalWith(Schema.Array(Schema.String), {
+  includeRegexes: Schema.optionalWith(Schema.Array(Schema.String), {
     default: () => [] as ReadonlyArray<string>,
   }),
-  excludeRegex: Schema.optionalWith(Schema.Array(Schema.String), {
+  excludeRegexes: Schema.optionalWith(Schema.Array(Schema.String), {
     default: () => [] as ReadonlyArray<string>,
   }),
   fallback: Schema.optionalWith(Schema.Literal("urltest", "skip"), {
@@ -75,8 +105,8 @@ export type NativeGroupOptions = typeof NativeGroupOptions.Type
 
 export const defaultNativeGroupOptions: NativeGroupOptions = {
   enable: false,
-  includeRegex: [],
-  excludeRegex: [],
+  includeRegexes: [],
+  excludeRegexes: [],
   fallback: "urltest",
   loadBalance: "selector",
 }

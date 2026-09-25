@@ -84,13 +84,10 @@ output:
 
 ### `groups` (instance-level, recommended)
 
-Custom groups select members across all subscriptions. sing-box cannot match
-`outbounds` by regex, so hoyofall resolves `includeRegex` / `excludeRegex` /
-`members` into explicit tags. Candidate keys are `<sub>/<name>`, where `<sub>`
-is the subscription `name` and `<name>` is the original proxy name, the original
-native-group name, or a per-subscription custom group id. Instance-level groups
-may also reference other instance-level groups by id. The final tag of an
-instance-level group is its id verbatim.
+Custom groups select members across all subscriptions by matching the
+**subscription name** and the **entity name** separately. sing-box cannot match
+`outbounds` by regex, so hoyofall resolves the regexes and typed `members` into
+explicit tags. The final tag of an instance-level group is its id verbatim.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -98,19 +95,31 @@ instance-level group is its id verbatim.
 | `.type` | `"selector"` \| `"urltest"` | `"selector"` | Group kind. |
 | `.includeProxies` | boolean | `true` | Consider proxies. |
 | `.includeNativeGroups` | boolean | `false` | Consider converted native groups. |
-| `.includeCustomGroups` | boolean | `false` | Consider per-subscription custom groups and other instance groups. |
-| `.includeRegex` | regex string array | `[]` | Keep candidates matching any regex; empty = all. |
-| `.excludeRegex` | regex string array | `[]` | Drop candidates matching any regex. |
-| `.members` | string array | `[]` | Explicit keys to add (`<sub>/<name>`, group id, or `DIRECT`/`REJECT`). |
+| `.includeCustomGroups` | boolean | `false` | Consider per-subscription custom groups and previously-defined instance groups. |
+| `.includeSubRegexes` | regex string array | `[]` | Keep candidates from subscriptions whose `name` matches any regex; empty = all. |
+| `.excludeSubRegexes` | regex string array | `[]` | Drop candidates from subscriptions whose `name` matches any regex. |
+| `.includeRegexes` | regex string array | `[]` | Keep entity names matching any regex; empty = all. |
+| `.excludeRegexes` | regex string array | `[]` | Drop entity names matching any regex. |
+| `.members` | array of typed refs | `[]` | Exact members; see below. |
 | `.includeDirect` | boolean | `false` | Append `direct`. |
 | `.includeBlock` | boolean | `false` | Append `block`. |
 | `.onEmpty` | `"skip"` \| `"fail"` | `"skip"` | Behaviour when no member matches. |
-| `.default` | string \| null | `null` | `selector` default member (a key). |
+| `.default` | string \| null | `null` | `selector` default member name. |
 | `.interruptExistConnections` | boolean | `false` | Maps to `interrupt_exist_connections`. |
 | `.url` | string | `"http://www.gstatic.com/generate_204"` | `urltest` probe URL. |
 | `.intervalSeconds` | integer > 0 | `300` | `urltest` interval. |
 | `.tolerance` | integer | `50` | `urltest` tolerance (ms). |
 | `.idleTimeoutSeconds` | integer > 0 | `1800` | `urltest` idle timeout. |
+
+`.members` entries are tagged structs (exact matches, still subject to the
+`includeSubRegexes` scope for subscription-derived members):
+
+```yaml
+members:
+  - { type: proxy,       subscription: default, name: "🇭🇰 HK-01" }
+  - { type: nativeGroup, subscription: default, name: "auto" }
+  - { type: customGroup, name: auto-hk }   # another custom group id
+```
 
 ### `convert` (instance-wide)
 
@@ -147,18 +156,19 @@ the `{sub}` value used in `proxyNameFormat`.
 
 Per-subscription groups are for the rare cases where you want groups scoped to
 one subscription. Most users should use instance-level `groups.custom` instead.
-Matching uses this subscription's original names and ids (no `<sub>/` prefix);
-a custom group's final tag is `proxyNameFormat` applied to its id
-(e.g. `{sub}-{id}`).
+Matching uses this subscription's original names and ids; a custom group's final
+tag is `proxyNameFormat` applied to its id (e.g. `{sub}-{id}`).
+`includeSubRegexes` / `excludeSubRegexes` are rejected here (the scope is already
+a single subscription).
 
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `groups.native.enable` | boolean | `false` | Convert the subscription's own `proxy-groups`. |
-| `groups.native.includeRegex` | regex string array | `[]` | Keep matching native group names; empty = all. |
-| `groups.native.excludeRegex` | regex string array | `[]` | Drop matching native group names. |
+| `groups.native.includeRegexes` | regex string array | `[]` | Keep matching native group names; empty = all. |
+| `groups.native.excludeRegexes` | regex string array | `[]` | Drop matching native group names. |
 | `groups.native.fallback` | `"urltest"` \| `"skip"` | `"urltest"` | Mapping for mihomo `fallback` groups. |
 | `groups.native.loadBalance` | `"selector"` \| `"urltest"` \| `"skip"` | `"selector"` | Mapping for mihomo `load-balance` groups. |
-| `groups.custom.<id>` | object | `{}` | Same fields as instance-level `groups.custom.<id>`, matched against this subscription's names/ids and tagged via `proxyNameFormat`. |
+| `groups.custom.<id>` | object | `{}` | Same fields as instance-level `groups.custom.<id>` except the `*SubRegexes` fields, matched against this subscription's names/ids and tagged via `proxyNameFormat`. |
 
 
 ### `output` (optional; at least one of `file` / `http` must be enabled)
@@ -279,8 +289,8 @@ in
       convert.emitBuiltinOutbounds = false;   # base defines direct/block
       subscriptions.default = { name = "default"; urlEnv = "SUB_URL"; };
       groups.custom = {
-        "hk-auto" = { type = "urltest"; includeRegex = [ "^default/🇭🇰" ]; };
-        "us-auto" = { type = "urltest"; includeRegex = [ "^default/🇺🇸" ]; };
+        "hk-auto" = { type = "urltest"; includeRegexes = [ "🇭🇰" ]; };
+        "us-auto" = { type = "urltest"; includeRegexes = [ "🇺🇸" ]; };
         # one stable umbrella tag for sing-box to reference via route.final
         proxy = { type = "selector"; includeCustomGroups = true; includeDirect = true; };
       };
@@ -297,14 +307,17 @@ in
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
+      TimeoutStartSec = 180;   # allow the wait below
     };
     script = ''
-      install -d -m 0700 -o sing-box -g sing-box /run/sing-box
+      # Do not use `-o/-g sing-box`: the user may not exist yet during the first
+      # activation; systemd fixes ownership when sing-box starts.
+      install -d -m 0700 /run/sing-box
       for _ in $(seq 1 120); do
         [ -f ${fragment} ] && break
         sleep 1
       done
-      install -m 0644 -o sing-box -g sing-box ${fragment} ${injected}
+      install -m 0644 ${fragment} ${injected}
     '';
   };
 
@@ -318,7 +331,7 @@ in
     script = ''
       sleep 1
       if [ -f ${fragment} ] && ! cmp -s ${fragment} ${injected}; then
-        install -m 0644 -o sing-box -g sing-box ${fragment} ${injected}
+        install -m 0644 ${fragment} ${injected}
         systemctl restart sing-box.service
       fi
     '';
@@ -360,6 +373,16 @@ Notes:
 - If a custom group matches nothing it is skipped, so a static reference to it
   (e.g. in the `default` selector) would make sing-box fail. Keep the regions
   you reference non-empty, or set `onEmpty = "fail"` to surface it early.
+
+- If a custom group matches nothing it is skipped, so prefer an umbrella group
+  with `includeDirect = true` (as above) and reference its stable tag, instead
+  of referencing per-region groups that may be absent.
+- Custom groups may reference previously-defined (earlier in config order)
+  custom groups: define referenced groups before the group that references them.
+- When the subscription URL comes from sops (`urlEnv` + `sops.templates`), order
+  the service after the secrets: `systemd.services.hoyofall-<name>.requires`
+  and `.after = [ "sops-install-secrets.service" ]`, otherwise `EnvironmentFile`
+  is missing on first activation and the unit restart-loops.
 
 ## Development
 
