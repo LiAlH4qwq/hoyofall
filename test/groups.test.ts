@@ -251,6 +251,24 @@ describe("instance-level custom groups", () => {
     ).toMatchObject({ outbounds: ["a-HK-1", "b-US-1"] })
   })
 
+  it("resolves custom-group references regardless of definition order", () => {
+    const a = convert(subscription("a", noGroups), fixture)
+    // `default` is defined before the group it references, as Nix attribute
+    // sets are sorted alphabetically.
+    const config = instanceConfig({
+      default: customGroup({
+        includeProxies: false,
+        includeCustomGroups: true,
+        includeDirect: true,
+      }),
+      hk: customGroup({ includeRegexes: ["^HK"] }),
+    })
+    const assembled = Effect.runSync(assembleFragment(config, [a]))
+    expect(
+      assembled.fragment.outbounds.find((outbound) => outbound.tag === "default"),
+    ).toMatchObject({ type: "selector", outbounds: ["hk", "direct"] })
+  })
+
   it("does not reference empty custom groups from later groups", () => {
     const a = convert(subscription("a", noGroups), fixture)
     const config = instanceConfig({
@@ -278,10 +296,9 @@ describe("instance-level custom groups", () => {
       true,
     )
     const assembled = Effect.runSync(assembleFragment(config, [a]))
-    expect(assembled.fragment.outbounds.slice(0, 2)).toEqual([
-      { type: "direct", tag: "direct" },
-      { type: "block", tag: "block" },
-    ])
+    expect(
+      assembled.fragment.outbounds.map((outbound) => outbound.tag).slice(0, 3),
+    ).toEqual(["auto", "direct", "block"])
   })
 
   it("fails on duplicate final tags", () => {
