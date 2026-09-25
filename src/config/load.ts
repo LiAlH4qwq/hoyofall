@@ -6,7 +6,7 @@ import {
   ConfigReadError,
   ConfigValidationError,
 } from "../errors"
-import { Config, type ConvertOptions, type Output, type Subscription } from "./schema"
+import { Config, type ConvertOptions, type CustomGroup, type InstanceGroups, type Output, type Subscription, type SubscriptionGroups } from "./schema"
 
 export const decodeConfig = (
   parsed: unknown,
@@ -35,10 +35,22 @@ export const validateConfig = (
       : ["output: at least one of output.file or output.http must be enabled"]
 
     const subscriptionIssues = yield* Effect.all(
-      config.subscriptions.map(subscriptionIssuesOf),
+      Object.entries(config.subscriptions).map(([id, subscription]) =>
+        subscriptionIssuesOf(id, subscription),
+      ),
     )
 
-    const issues = [...outputIssues, ...subscriptionIssues.flat()]
+    const instanceGroupIssues = yield* Effect.all(
+      Object.entries(config.groups.custom).map(([id, group]) =>
+        customGroupIssues("groups", id, group),
+      ),
+    )
+
+    const issues = [
+      ...outputIssues,
+      ...subscriptionIssues.flat(),
+      ...instanceGroupIssues.flat(),
+    ]
     if (issues.length > 0) {
       return yield* Effect.fail(new ConfigValidationError({ issues }))
     }
@@ -54,7 +66,31 @@ const isInvalidRegex = (pattern: string): Effect.Effect<boolean> =>
     { onFailure: () => true, onSuccess: () => false },
   )
 
+const regexIssues = (
+  label: string,
+  patterns: ReadonlyArray<string>,
+): Effect.Effect<ReadonlyArray<string>> =>
+  Effect.gen(function* () {
+    const invalid = yield* Effect.all(patterns.map(isInvalidRegex))
+    return invalid.some(Boolean)
+      ? [`${label}: invalid regular expression`]
+      : []
+  })
+
+const customGroupIssues = (
+  scope: string,
+  id: string,
+  group: CustomGroup,
+): Effect.Effect<ReadonlyArray<string>> =>
+  Effect.gen(function* () {
+    const label = `${scope}.custom.${id}`
+    const includeIssues = yield* regexIssues(`${label}.includeRegex`, group.includeRegex)
+    const excludeIssues = yield* regexIssues(`${label}.excludeRegex`, group.excludeRegex)
+    return [...includeIssues, ...excludeIssues]
+  })
+
 const subscriptionIssuesOf = (
+  id: string,
   subscription: Subscription,
 ): Effect.Effect<ReadonlyArray<string>> =>
   Effect.gen(function* () {
@@ -62,14 +98,32 @@ const subscriptionIssuesOf = (
     const hasUrlEnv = "urlEnv" in subscription
     const sourceIssues = hasUrl || hasUrlEnv
       ? []
-      : [`subscriptions.${subscription.id}: one of url or urlEnv is required`]
-    const invalidExcludes = yield* Effect.all(
-      subscription.convert.exclude.map(isInvalidRegex),
+      : [`subscriptions.${id}: one of url or urlEnv is required`]
+    const excludeIssues = yield* regexIssues(
+      `subscriptions.${id}.convert.exclude`,
+      subscription.convert.exclude,
     )
-    const formatIssues = invalidExcludes.some(Boolean)
-      ? [`subscriptions.${subscription.id}.convert.exclude: invalid regular expression`]
-      : []
-    return [...sourceIssues, ...formatIssues]
+    const nativeIssues = yield* Effect.all([
+      regexIssues(
+        `subscriptions.${id}.groups.native.includeRegex`,
+        subscription.groups.native.includeRegex,
+      ),
+      regexIssues(
+        `subscriptions.${id}.groups.native.excludeRegex`,
+        subscription.groups.native.excludeRegex,
+      ),
+    ])
+    const customIssues = yield* Effect.all(
+      Object.entries(subscription.groups.custom).map(([groupId, group]) =>
+        customGroupIssues(`subscriptions.${id}.groups`, groupId, group),
+      ),
+    )
+    return [
+      ...sourceIssues,
+      ...excludeIssues,
+      ...nativeIssues.flat(),
+      ...customIssues.flat(),
+    ]
   })
 
 export const loadConfig = (
@@ -105,11 +159,13 @@ export interface ResolvedSubscription {
   readonly format: "auto" | "clash" | "base64"
   readonly onUnsupported: "skip" | "fail"
   readonly convert: Subscription["convert"]
+  readonly groups: SubscriptionGroups
 }
 
 export interface ResolvedConfig {
   readonly subscriptions: ReadonlyArray<ResolvedSubscription>
   readonly convert: ConvertOptions
+  readonly groups: InstanceGroups
   readonly output: Output
 }
 
@@ -118,26 +174,27 @@ export const resolveConfig = (
 ): Effect.Effect<ResolvedConfig, ConfigValidationError> =>
   Effect.gen(function* () {
     const subscriptions = yield* Effect.all(
-      config.subscriptions.map(
-        (subscription): Effect.Effect<ResolvedSubscription, ConfigValidationError> => {
+      Object.entries(config.subscriptions).map(
+        ([id, subscription]): Effect.Effect<ResolvedSubscription, ConfigValidationError> => {
           const urlEffect =
             "url" in subscription && subscription.url !== undefined
               ? Effect.succeed(subscription.url)
               : resolveEnv(
                   "urlEnv" in subscription ? subscription.urlEnv : "",
-                  subscription.id,
+                  id,
                 )
           return urlEffect.pipe(
             Effect.map(
               (url): ResolvedSubscription => ({
-                id: subscription.id,
-                name: subscription.name ?? subscription.id,
+                id,
+                name: subscription.name ?? id,
                 url,
                 intervalSeconds: subscription.intervalSeconds,
                 userAgent: subscription.userAgent,
                 format: subscription.format,
                 onUnsupported: subscription.onUnsupported,
                 convert: subscription.convert,
+                groups: subscription.groups,
               }),
             ),
           )
@@ -147,6 +204,7 @@ export const resolveConfig = (
     return {
       subscriptions,
       convert: config.convert,
+      groups: config.groups,
       output: config.output,
     }
   })

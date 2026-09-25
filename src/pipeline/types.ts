@@ -1,9 +1,9 @@
+import type { SubscriptionFragment } from "../convert/fragment"
 import type { ConversionWarning } from "../errors"
-import type { Fragment } from "../singbox/schema"
 
 export interface ReadyState {
   readonly _tag: "Ready"
-  readonly fragment: Fragment
+  readonly conversion: SubscriptionFragment
   readonly warnings: ReadonlyArray<ConversionWarning>
   readonly updatedAt: number
   readonly lastError: string | undefined

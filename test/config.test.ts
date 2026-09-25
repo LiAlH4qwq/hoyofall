@@ -5,7 +5,7 @@ import { decodeConfig, validateConfig } from "../src/config/load"
 
 const base = `
 subscriptions:
-  - id: airport
+  airport:
     url: https://example.com/sub
 output:
   file:
@@ -22,15 +22,17 @@ describe("config decoding", () => {
     expect(config.output.file.mode).toBe("aggregate")
     expect(config.output.file.pretty).toBe(true)
     expect(config.output.http.enabled).toBe(false)
-    expect(config.subscriptions[0]?.intervalSeconds).toBe(3600)
-    expect(config.subscriptions[0]?.onUnsupported).toBe("skip")
-    expect(config.subscriptions[0]?.convert.includeGroups).toBe(false)
+    expect(config.subscriptions["airport"]?.intervalSeconds).toBe(3600)
+    expect(config.subscriptions["airport"]?.onUnsupported).toBe("skip")
+    expect(config.subscriptions["airport"]?.groups.native.enable).toBe(false)
+    expect(config.subscriptions["airport"]?.groups.custom).toEqual({})
+    expect(config.groups.custom).toEqual({})
   })
 
   it("defaults the output when omitted", () => {
     const yaml = `
 subscriptions:
-  - id: airport
+  airport:
     url: https://example.com/sub
 `
     const config = Effect.runSync(decodeConfig(parse(yaml), "test.yaml"))
@@ -46,7 +48,7 @@ subscriptions:
   it("defaults the aggregate path when only output.file is given", () => {
     const yaml = `
 subscriptions:
-  - id: airport
+  airport:
     url: https://example.com/sub
 output:
   file:
@@ -62,7 +64,7 @@ output:
   it("rejects a config with no outputs", () => {
     const yaml = `
 subscriptions:
-  - id: airport
+  airport:
     url: https://example.com/sub
 output:
   file:
@@ -75,9 +77,9 @@ output:
     expect(exit._tag).toBe("Failure")
   })
 
-  it("rejects an invalid subscription payload shape", () => {
+  it("rejects an empty subscriptions map", () => {
     const exit = Effect.runSyncExit(
-      decodeConfig(parse("subscriptions: []\noutput: {}\n"), "test.yaml"),
+      decodeConfig(parse("subscriptions: {}\noutput: {}\n"), "test.yaml"),
     )
     expect(exit._tag).toBe("Failure")
   })

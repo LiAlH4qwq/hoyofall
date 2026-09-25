@@ -1,9 +1,10 @@
 import { FileSystem, Path } from "@effect/platform"
 import { Effect } from "effect"
-import type { FileOutput, Output } from "../config/schema"
+import type { ResolvedConfig } from "../config/load"
+import type { FileOutput } from "../config/schema"
+import { assembleFragment, warningMessage, withBuiltinOutbounds, type SubscriptionFragment } from "../convert/fragment"
 import { OutputWriteError } from "../errors"
-import { mergeFragments, withBuiltinOutbounds } from "../convert/fragment"
-import type { Fragment } from "../singbox/schema"
+import type { DuplicateTagError, EmptyCustomGroupError } from "../errors"
 import type { CacheMap } from "../pipeline/types"
 
 const atomicWrite = (
@@ -23,45 +24,48 @@ const atomicWrite = (
     Effect.mapError((cause) => new OutputWriteError({ path: filePath, cause })),
   )
 
-const serialize = (fragment: Fragment, pretty: boolean): string =>
+const serialize = (fragment: { readonly outbounds: ReadonlyArray<unknown> }, pretty: boolean): string =>
   JSON.stringify(fragment, null, pretty ? 2 : undefined)
 
 const collect = (
-  subscriptionIds: ReadonlyArray<string>,
+  config: ResolvedConfig,
   cache: CacheMap,
-): ReadonlyArray<{ readonly id: string; readonly fragment: Fragment }> =>
-  subscriptionIds.flatMap((id) => {
-    const state = cache[id]
+): ReadonlyArray<SubscriptionFragment> =>
+  config.subscriptions.flatMap((subscription) => {
+    const state = cache[subscription.id]
     return state !== undefined && state._tag === "Ready"
-      ? [{ id, fragment: state.fragment }]
+      ? [state.conversion]
       : []
   })
 
 export const writeSnapshot = (
-  output: Output,
-  emitBuiltinOutbounds: boolean,
-  subscriptionIds: ReadonlyArray<string>,
+  config: ResolvedConfig,
   cache: CacheMap,
-): Effect.Effect<void, OutputWriteError, FileSystem.FileSystem | Path.Path> =>
+): Effect.Effect<
+  void,
+  OutputWriteError | DuplicateTagError | EmptyCustomGroupError,
+  FileSystem.FileSystem | Path.Path
+> =>
   Effect.gen(function* () {
-    const file: FileOutput = output.file
+    const file: FileOutput = config.output.file
     if (!file.enabled) {
       return
     }
-    const items = collect(subscriptionIds, cache)
+    const conversions = collect(config, cache)
+    const assembled = yield* assembleFragment(config, conversions)
+
+    yield* Effect.all(
+      assembled.warnings.map((warning) =>
+        Effect.logWarning(`output: ${warningMessage(warning)}`),
+      ),
+    )
 
     const aggregateWrites =
       file.mode === "aggregate" || file.mode === "both"
         ? [
             atomicWrite(
               file.path,
-              serialize(
-                withBuiltinOutbounds(
-                  mergeFragments(items.map((item) => item.fragment)),
-                  emitBuiltinOutbounds,
-                ),
-                file.pretty,
-              ),
+              serialize(assembled.fragment, file.pretty),
               file.permissions,
             ),
           ]
@@ -69,10 +73,16 @@ export const writeSnapshot = (
 
     const perSubscriptionWrites =
       file.mode === "per-subscription" || file.mode === "both"
-        ? items.map((item) =>
+        ? conversions.map((conversion) =>
             atomicWrite(
-              `${file.directory}/${item.id}.json`,
-              serialize(item.fragment, file.pretty),
+              `${file.directory}/${conversion.subscriptionId}.json`,
+              serialize(
+                withBuiltinOutbounds(
+                  conversion.fragment,
+                  config.convert.emitBuiltinOutbounds,
+                ),
+                file.pretty,
+              ),
               file.permissions,
             ),
           )

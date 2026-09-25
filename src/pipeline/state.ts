@@ -112,7 +112,7 @@ const refreshOne = (
     Effect.map(
       (fragment): SubscriptionState => ({
         _tag: "Ready",
-        fragment: fragment.fragment,
+        conversion: fragment,
         warnings: fragment.warnings,
         updatedAt: Date.now(),
         lastError: undefined,
@@ -180,22 +180,23 @@ export const startInstance = (
 > =>
   Effect.gen(function* () {
     const pubsub = yield* PubSub.unbounded<CacheMap>({ replay: 1 })
-    const subscriptionIds = config.subscriptions.map(
-      (subscription) => subscription.id,
-    )
     const stream = snapshotStream(config).pipe(
       Stream.tap((cache) =>
-        writeSnapshot(
-          config.output,
-          config.convert.emitBuiltinOutbounds,
-          subscriptionIds,
-          cache,
-        ).pipe(
-          Effect.catchTag("OutputWriteError", (error) =>
-            Effect.logError(
-              `failed to write output at ${error.path}: ${String(error.cause)}`,
-            ),
-          ),
+        writeSnapshot(config, cache).pipe(
+          Effect.catchTags({
+            OutputWriteError: (error) =>
+              Effect.logError(
+                `failed to write output at ${error.path}: ${String(error.cause)}`,
+              ),
+            DuplicateTagError: (error) =>
+              Effect.logError(
+                `refusing to write output: duplicate outbound tags ${error.tags.join(", ")}`,
+              ),
+            EmptyCustomGroupError: (error) =>
+              Effect.logError(
+                `refusing to write output: ${warningMessage(error)}`,
+              ),
+          }),
         ),
       ),
     )
