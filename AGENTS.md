@@ -159,10 +159,16 @@ small helper and justify it in a comment.
 - `nix/package.nix` builds with pnpm + rolldown; if a dependency changes, the
   `pnpmDeps.hash` in `nix/package.nix` must be refreshed (build, then copy the
   `got:` hash from the mismatch).
-- `nix/module.nix` generates one `hoyofall-<name>` systemd service per
-  `services.hoyofall.instances.<name>` and validates settings against the
-  shipped `schema.json` with `check-jsonschema`. For `settings`-based instances
-  it defaults `output.file.path` / `output.file.directory` to
-  `/run/hoyofall-<name>/hoyofall.json` and `/run/hoyofall-<name>` (the service
+- `nix/module.nix` is **single-instance**: it generates `hoyofall.service` and
+  validates `settings` against the shipped `schema.json` with
+  `check-jsonschema`. It defaults `output.file.path` / `output.file.directory`
+  to `/run/hoyofall/hoyofall.json` and `/run/hoyofall` (the service
   RuntimeDirectory and WorkingDirectory); other output paths require
   `extraReadWritePaths`.
+- `services.hoyofall.singboxIntegration.enable = true` makes the module own the
+  `services.sing-box` injection (root oneshot + `systemd.paths` refresh +
+  `RuntimeDirectoryPreserve`); do not reimplement this in user configs.
+- **No bash in module scripts.** Any generated systemd script must be Nushell
+  via `pkgs.writers.writeNu`, preferring Nushell builtins
+  (`mkdir`/`cp`/`path exists`/`hash sha256`/`sleep`) and only falling back to
+  external commands (`^systemctl`, uutils) when there is no builtin.

@@ -221,168 +221,87 @@ With `emitBuiltinOutbounds: false` the base config is expected to define the
 
 ## Nix
 
+The flake exposes `packages.<system>.hoyofall` (and `default`),
+`overlays.default`, and `nixosModules.default`. The NixOS module is
+**single-instance** (one `hoyofall.service`); `singboxIntegration` lets it own the
+injection into `services.sing-box`.
+
 ```nix
 {
   inputs.hoyofall.url = "github:you/hoyofall";
-
-  # Option A: NixOS module (multi-instance, like services.cloudflared)
-  # Each instance becomes a `hoyofall-<name>` systemd service.
   imports = [ inputs.hoyofall.nixosModules.default ];
-  services.hoyofall.instances.default = {
+
+  services.hoyofall = {
+    enable = true;
+
     settings = {
-      subscriptions.airport = {
-        urlEnv = "AIRPORT_URL";
+      convert.emitBuiltinOutbounds = false;   # base defines direct/block
+      subscriptions.default = {
+        name = "default";
+        urlEnv = "SUB_URL";
         intervalSeconds = 3600;
       };
-      # output.file.path / directory default to
-      # /run/hoyofall-default/hoyofall.json and /run/hoyofall-default
+      groups.custom = {
+        "hk-auto" = { type = "urltest"; includeRegexes = [ "🇭🇰" ]; };
+        "us-auto" = { type = "urltest"; includeRegexes = [ "🇺🇸" ]; };
+        # stable umbrella selector for sing-box to reference via route.final
+        default = {
+          type = "selector";
+          includeProxies = false;
+          includeCustomGroups = true;
+          includeDirect = true;
+        };
+      };
     };
-    environmentFile = "/run/secrets/hoyofall-default.env";
+
+    environmentFile = "/run/secrets/hoyofall.env";
+
+    # let the module inject the fragment into services.sing-box
+    singboxIntegration.enable = true;
   };
 
-  # Option B: package + overlay
+  services.sing-box = {
+    enable = true;
+    settings = {
+      outbounds = [
+        { type = "direct"; tag = "direct"; }
+        { type = "block"; tag = "block"; }
+      ];
+      route.final = "default";   # provided by the hoyofall fragment
+    };
+  };
+
+  # package only (without the module):
   # nixpkgs.overlays = [ inputs.hoyofall.overlays.default ];
   # environment.systemPackages = [ pkgs.hoyofall ];
 }
 ```
 
-The instance configuration is validated against `schema.json` with
-`check-jsonschema` before the service is built.
+What the module does:
 
-For `settings`-based instances the module defaults `output.file.path` to
-`/run/hoyofall-<name>/hoyofall.json` and `output.file.directory` to
-`/run/hoyofall-<name>` — the instance's systemd `RuntimeDirectory`, which is
-also its `WorkingDirectory` and the only writable path by default. Point output
-elsewhere by setting `output.file.path` / `output.file.directory` explicitly and
-adding the directory to `extraReadWritePaths`. When using `configFile`, the
-module cannot inject these defaults, so set them yourself.
-
-### Injecting the fragment into `services.sing-box`
-
-The nixpkgs `services.sing-box` module runs
-`sing-box -D $STATE_DIRECTORY -C $RUNTIME_DIRECTORY run`, where
-`RuntimeDirectory = "sing-box"` (i.e. `/run/sing-box`) and `ExecStartPre` writes
-your `settings` to `/run/sing-box/config.json`. `-C` reads **every** top-level
-`*.json` in that directory and merges them — **objects are overridden by key and
-arrays are appended** — so dropping the hoyofall fragment there appends its
-`outbounds` to the ones from `settings`.
-
-Because `services.sing-box.settings` is static Nix, reference the generated tags
-by name (they are known at evaluation time), and keep the fragment's dynamic
-parts as groups. sing-box reads the config only at startup, so a systemd path
-unit re-injects and restarts it when hoyofall refreshes.
-
-> `systemd.services.<name>.preStart` runs as the service `User` (`sing-box`), so
-> it **cannot** read hoyofall's `0700` `RuntimeDirectory`. Injecting must be done
-> by a root oneshot (no `User =`) ordered `Before=sing-box.service`.
-
-```nix
-{ config, pkgs, lib, ... }:
-let
-  fragment = "/run/hoyofall-default/hoyofall.json";   # hoyofall module default
-  injected = "/run/sing-box/zz-hoyofall.json";
-in
-{
-  # 1. hoyofall produces the fragment (see the module example above)
-  services.hoyofall.instances.default = {
-    settings = {
-      convert.emitBuiltinOutbounds = false;   # base defines direct/block
-      subscriptions.default = { name = "default"; urlEnv = "SUB_URL"; };
-      groups.custom = {
-        "hk-auto" = { type = "urltest"; includeRegexes = [ "🇭🇰" ]; };
-        "us-auto" = { type = "urltest"; includeRegexes = [ "🇺🇸" ]; };
-        # one stable umbrella tag for sing-box to reference via route.final
-        proxy = { type = "selector"; includeCustomGroups = true; includeDirect = true; };
-      };
-    };
-    environmentFile = "/run/secrets/hoyofall-default.env";
-  };
-
-  # 2. root oneshot injects the fragment before sing-box starts
-  systemd.services.hoyofall-inject-singbox = {
-    wants = [ "hoyofall-default.service" ];
-    after = [ "hoyofall-default.service" ];
-    before = [ "sing-box.service" ];
-    requiredBy = [ "sing-box.service" ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      TimeoutStartSec = 180;   # allow the wait below
-    };
-    script = ''
-      # Do not use `-o/-g sing-box`: the user may not exist yet during the first
-      # activation; systemd fixes ownership when sing-box starts.
-      install -d -m 0700 /run/sing-box
-      for _ in $(seq 1 120); do
-        [ -f ${fragment} ] && break
-        sleep 1
-      done
-      install -m 0644 ${fragment} ${injected}
-    '';
-  };
-
-  # keep the runtime dir across restarts so the injected file survives
-  systemd.services.sing-box.serviceConfig.RuntimeDirectoryPreserve = "yes";
-
-  # 3. re-inject + restart when hoyofall refreshes (cmp guards against churn)
-  systemd.services.hoyofall-singbox-refresh = {
-    serviceConfig.Type = "oneshot";
-    path = [ pkgs.diffutils ];   # for `cmp`
-    script = ''
-      sleep 1
-      if [ -f ${fragment} ] && ! cmp -s ${fragment} ${injected}; then
-        install -m 0644 ${fragment} ${injected}
-        systemctl restart sing-box.service
-      fi
-    '';
-  };
-  systemd.paths.hoyofall-singbox-refresh = {
-    wantedBy = [ "multi-user.target" ];
-    after = [ "hoyofall-default.service" ];
-    pathConfig.PathChanged = "/run/hoyofall-default";
-  };
-
-  # 4. native sing-box config; only reference tags from the fragment
-  services.sing-box = {
-    enable = true;
-    settings = {
-      inbounds = [ { type = "mixed"; tag = "mixed-in"; listen = "127.0.0.1"; listen_port = 7890; } ];
-      outbounds = [
-        { type = "direct"; tag = "direct"; }
-        { type = "block"; tag = "block"; }
-      ];
-      route.final = "proxy";   # provided by the hoyofall fragment
-    };
-  };
-}
-```
+- `hoyofall.service`: `DynamicUser`, `RuntimeDirectory=hoyofall` (0700),
+  `WorkingDirectory=/run/hoyofall`. `settings` are validated against the shipped
+  `schema.json` with `check-jsonschema` at build time. `output.file` defaults to
+  `/run/hoyofall/hoyofall.json` / `/run/hoyofall`; other paths need
+  `extraReadWritePaths`. `configFile` bypasses the output defaults.
+- `singboxIntegration.enable`: installs a root oneshot that copies the fragment
+  into sing-box's config directory (`-C` merge; objects override, arrays append),
+  sets `RuntimeDirectoryPreserve=yes`, and adds a `systemd.paths` unit that
+  re-injects and restarts sing-box when the fragment changes. It requires
+  `services.sing-box.enable = true`.
+- All generated scripts are **Nushell** (`pkgs.writers.writeNu`), never bash.
 
 Notes:
 
-- Keep `convert.emitBuiltinOutbounds = false` (the default): the base `settings`
-  already define `direct`/`block`, and duplicate tags make sing-box fail.
-- Referencing a tag (e.g. `route.final = "proxy"`) before the fragment exists
-  makes sing-box fail to start; the inject oneshot waits for it and `requiredBy`
-  gates `sing-box.service`.
-- The fragment contains proxy credentials; both `/run/sing-box` and
-  `/run/hoyofall-default` are `0700`, so it stays readable only by the two
-  service users (the copy is `0644` inside sing-box's own `0700` directory).
-- `restartTriggers` is static and cannot watch a runtime file; the `systemd.paths`
-  unit is what picks up refreshes. If updates are not critical, drop step 3 and
-  restart sing-box manually.
-- If a custom group matches nothing it is skipped, so a static reference to it
-  (e.g. in the `default` selector) would make sing-box fail. Keep the regions
-  you reference non-empty, or set `onEmpty = "fail"` to surface it early.
-
-- If a custom group matches nothing it is skipped, so prefer an umbrella group
-  with `includeDirect = true` (as above) and reference its stable tag, instead
-  of referencing per-region groups that may be absent.
-- Custom groups may reference previously-defined (earlier in config order)
-  custom groups: define referenced groups before the group that references them.
-- When the subscription URL comes from sops (`urlEnv` + `sops.templates`), order
-  the service after the secrets: `systemd.services.hoyofall-<name>.requires`
-  and `.after = [ "sops-install-secrets.service" ]`, otherwise `EnvironmentFile`
-  is missing on first activation and the unit restart-loops.
+- Keep `convert.emitBuiltinOutbounds = false` (the default) when the base
+  `settings` define `direct`/`block`; duplicate tags make sing-box fail.
+- Reference a stable umbrella group (as `default` above) instead of per-region
+  groups that may be absent; a missing referenced tag makes sing-box fail.
+- Custom groups may reference other custom groups regardless of definition order
+  (Nix attribute sets are sorted alphabetically).
+- When the subscription URL comes from sops (`urlEnv` + `sops.templates`), add
+  `systemd.services.hoyofall.requires` / `.after = [ "sops-install-secrets.service" ]`
+  so `EnvironmentFile` exists on first activation.
 
 ## Development
 

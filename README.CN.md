@@ -205,154 +205,83 @@ sing-box merge merged.json -c base.json -c /run/hoyofall/fragment.json
 
 ## Nix
 
+flake 输出 `packages.<system>.hoyofall`（及 `default`）、`overlays.default`、
+`nixosModules.default`。NixOS 模块为**单实例**（一个 `hoyofall.service`）；
+`singboxIntegration` 让模块负责注入 `services.sing-box`。
+
 ```nix
 {
   inputs.hoyofall.url = "github:you/hoyofall";
-
-  # 方式 A：NixOS 模块（多实例，类似 services.cloudflared）
-  # 每个实例生成一个 `hoyofall-<name>` systemd 服务。
   imports = [ inputs.hoyofall.nixosModules.default ];
-  services.hoyofall.instances.default = {
+
+  services.hoyofall = {
+    enable = true;
+
     settings = {
-      subscriptions.airport = {
-        urlEnv = "AIRPORT_URL";
+      convert.emitBuiltinOutbounds = false;   # base 已定义 direct/block
+      subscriptions.default = {
+        name = "default";
+        urlEnv = "SUB_URL";
         intervalSeconds = 3600;
       };
-      # output.file.path / directory 默认指向
-      # /run/hoyofall-default/hoyofall.json 与 /run/hoyofall-default
+      groups.custom = {
+        "hk-auto" = { type = "urltest"; includeRegexes = [ "🇭🇰" ]; };
+        "us-auto" = { type = "urltest"; includeRegexes = [ "🇺🇸" ]; };
+        # 供 sing-box 用 route.final 引用的稳定总选择器
+        default = {
+          type = "selector";
+          includeProxies = false;
+          includeCustomGroups = true;
+          includeDirect = true;
+        };
+      };
     };
-    environmentFile = "/run/secrets/hoyofall-default.env";
+
+    environmentFile = "/run/secrets/hoyofall.env";
+
+    # 由模块注入到 services.sing-box
+    singboxIntegration.enable = true;
   };
 
-  # 方式 B：package + overlay
+  services.sing-box = {
+    enable = true;
+    settings = {
+      outbounds = [
+        { type = "direct"; tag = "direct"; }
+        { type = "block"; tag = "block"; }
+      ];
+      route.final = "default";   # 由 hoyofall 片段提供
+    };
+  };
+
+  # 仅使用包（不经模块）：
   # nixpkgs.overlays = [ inputs.hoyofall.overlays.default ];
   # environment.systemPackages = [ pkgs.hoyofall ];
 }
 ```
 
-实例配置在构建服务前会用 `check-jsonschema` 依据 `schema.json` 校验。
+模块行为：
 
-对于基于 `settings` 的实例，模块会把 `output.file.path` 默认设为
-`/run/hoyofall-<name>/hoyofall.json`、`output.file.directory` 默认设为
-`/run/hoyofall-<name>`——即实例的 systemd `RuntimeDirectory`，它同时也是
-`WorkingDirectory`，并且默认是唯一可写路径。若要把输出指到别处，请显式设置
-`output.file.path` / `output.file.directory`，并把该目录加入 `extraReadWritePaths`。
-使用 `configFile` 时模块无法注入这些默认值，需要自行设置。
-
-### 注入到 `services.sing-box`
-
-nixpkgs 的 `services.sing-box` 模块以
-`sing-box -D $STATE_DIRECTORY -C $RUNTIME_DIRECTORY run` 启动，其中
-`RuntimeDirectory = "sing-box"`（即 `/run/sing-box`），并由 `ExecStartPre` 把
-`settings` 写成 `/run/sing-box/config.json`。`-C` 会读取该目录下**所有**顶层
-`*.json` 并合并——**对象按键覆盖、数组追加**——因此把 hoyofall 片段放进该目录，其
-`outbounds` 就会追加到 `settings` 的 outbounds 之后。
-
-由于 `services.sing-box.settings` 是静态 Nix，可直接按名字引用生成出来的 tag（求值期即已
-确定）；把动态部分都留在片段的分组里。sing-box 只在启动时读配置，因此用一个 systemd
-path 单元在 hoyofall 刷新后重新注入并重启。
-
-> `systemd.services.<name>.preStart` 以服务的 `User`（`sing-box`）身份运行，**无法**读取
-> hoyofall 的 `0700` `RuntimeDirectory`。注入必须由一个 root oneshot（不设 `User =`）
-> 完成，并以 `Before=sing-box.service` 排序。
-
-```nix
-{ config, pkgs, lib, ... }:
-let
-  fragment = "/run/hoyofall-default/hoyofall.json";   # hoyofall 模块默认路径
-  injected = "/run/sing-box/zz-hoyofall.json";
-in
-{
-  # 1. hoyofall 产出片段（见上面的模块示例）
-  services.hoyofall.instances.default = {
-    settings = {
-      convert.emitBuiltinOutbounds = false;   # base 已定义 direct/block
-      subscriptions.default = { name = "default"; urlEnv = "SUB_URL"; };
-      groups.custom = {
-        "hk-auto" = { type = "urltest"; includeRegexes = [ "🇭🇰" ]; };
-        "us-auto" = { type = "urltest"; includeRegexes = [ "🇺🇸" ]; };
-        # 一个稳定的总选择器，供 sing-box 用 route.final 引用
-        proxy = { type = "selector"; includeCustomGroups = true; includeDirect = true; };
-      };
-    };
-    environmentFile = "/run/secrets/hoyofall-default.env";
-  };
-
-  # 2. root oneshot：在 sing-box 启动前注入片段
-  systemd.services.hoyofall-inject-singbox = {
-    wants = [ "hoyofall-default.service" ];
-    after = [ "hoyofall-default.service" ];
-    before = [ "sing-box.service" ];
-    requiredBy = [ "sing-box.service" ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      TimeoutStartSec = 180;   # 为下面的等待留足时间
-    };
-    script = ''
-      # 不要用 `-o/-g sing-box`：首次激活时该用户可能尚未创建；
-      # sing-box 启动时 systemd 会修正属主。
-      install -d -m 0700 /run/sing-box
-      for _ in $(seq 1 120); do
-        [ -f ${fragment} ] && break
-        sleep 1
-      done
-      install -m 0644 ${fragment} ${injected}
-    '';
-  };
-
-  # 保留 runtime dir，使注入的文件在重启后仍存在
-  systemd.services.sing-box.serviceConfig.RuntimeDirectoryPreserve = "yes";
-
-  # 3. hoyofall 刷新后重新注入并重启（cmp 用于避免抖动）
-  systemd.services.hoyofall-singbox-refresh = {
-    serviceConfig.Type = "oneshot";
-    path = [ pkgs.diffutils ];   # 提供 cmp
-    script = ''
-      sleep 1
-      if [ -f ${fragment} ] && ! cmp -s ${fragment} ${injected}; then
-        install -m 0644 ${fragment} ${injected}
-        systemctl restart sing-box.service
-      fi
-    '';
-  };
-  systemd.paths.hoyofall-singbox-refresh = {
-    wantedBy = [ "multi-user.target" ];
-    after = [ "hoyofall-default.service" ];
-    pathConfig.PathChanged = "/run/hoyofall-default";
-  };
-
-  # 4. 原生 sing-box 配置；只引用来自片段的 tag
-  services.sing-box = {
-    enable = true;
-    settings = {
-      inbounds = [ { type = "mixed"; tag = "mixed-in"; listen = "127.0.0.1"; listen_port = 7890; } ];
-      outbounds = [
-        { type = "direct"; tag = "direct"; }
-        { type = "block"; tag = "block"; }
-      ];
-      route.final = "proxy";   # 由 hoyofall 片段提供
-    };
-  };
-}
-```
+- `hoyofall.service`：`DynamicUser`、`RuntimeDirectory=hoyofall`(0700)、
+  `WorkingDirectory=/run/hoyofall`；`settings` 在构建时用 `check-jsonschema`
+  依据 `schema.json` 校验。`output.file` 默认 `/run/hoyofall/hoyofall.json` /
+  `/run/hoyofall`；其他路径需 `extraReadWritePaths`；`configFile` 会绕过该默认。
+- `singboxIntegration.enable`：安装一个 root oneshot，把片段拷进 sing-box 的配置目录
+  （`-C` 合并；对象按键覆盖、数组追加），设置 `RuntimeDirectoryPreserve=yes`，并加一个
+  `systemd.paths` 单元在片段变化时重注入并重启 sing-box。需要
+  `services.sing-box.enable = true`。
+- 所有生成脚本都是 **Nushell**（`pkgs.writers.writeNu`），绝不使用 bash。
 
 注意：
 
-- 保持 `convert.emitBuiltinOutbounds = false`（默认）：base `settings` 已定义
-  `direct`/`block`，重复 tag 会让 sing-box 报错。
-- 在片段生成之前引用某个 tag（如 `route.final = "proxy"`）会让 sing-box 启动失败；
-  注入 oneshot 会等待片段、并由 `requiredBy` 把住 `sing-box.service`。
-- 片段含代理凭据；`/run/sing-box` 与 `/run/hoyofall-default` 均为 `0700`，只有两个服务
-  用户可读（副本以 `0644` 落在 sing-box 自己的 `0700` 目录内）。
-- `restartTriggers` 是静态的，无法监听运行时文件；真正感知刷新的是 `systemd.paths`
-  单元。若不介意延迟更新，可去掉第 3 步，改为手动重启 sing-box。
-- 自定义组若匹配为空会被跳过；推荐用带 `includeDirect = true` 的总组（如上例的
-  `proxy`），只静态引用它的稳定 tag，而不是可能缺失的各区域组。
-- 自定义组可引用**更早定义**（配置顺序在前）的自定义组：请先定义被引用者，再定义引用者。
-- 当订阅链接来自 sops（`urlEnv` + `sops.templates`）时，给服务加
-  `systemd.services.hoyofall-<name>.requires/after = [ "sops-install-secrets.service" ]`，
-  否则首次激活时 `EnvironmentFile` 尚不存在，服务会反复重启。
+- base `settings` 已定义 `direct`/`block` 时保持 `convert.emitBuiltinOutbounds = false`（默认）；
+  重复 tag 会让 sing-box 报错。
+- 只静态引用一个稳定总组（如上例 `default`），不要引用可能缺失的区域组——缺失的 tag 会让
+  sing-box 启动失败。
+- 自定义组可引用其它自定义组，且**与定义顺序无关**（Nix 属性集按字母序排序）。
+- 订阅链接来自 sops（`urlEnv` + `sops.templates`）时，给服务加
+  `systemd.services.hoyofall.requires/after = [ "sops-install-secrets.service" ]`，
+  否则首次激活时 `EnvironmentFile` 尚不存在。
 
 ## 开发
 
