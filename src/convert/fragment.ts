@@ -187,7 +187,10 @@ const buildCustomGroup = (args: BuildCustomGroupArgs): BuiltCustomGroup => {
         group.excludeSubRegexes,
       )
     : []
-  const customPool = group.includeCustomGroups ? args.customCandidates : []
+  const selflessCustomCandidates = args.customCandidates.filter(
+    (candidate) => candidate.name !== args.id,
+  )
+  const customPool = group.includeCustomGroups ? selflessCustomCandidates : []
 
   const proxySelected = selectCandidates(
     proxyPool,
@@ -211,7 +214,7 @@ const buildCustomGroup = (args: BuildCustomGroupArgs): BuiltCustomGroup => {
       member,
       args.proxyCandidates,
       args.nativeCandidates,
-      args.customCandidates,
+      selflessCustomCandidates,
     ),
   }))
 
@@ -293,18 +296,95 @@ const buildCustomGroup = (args: BuildCustomGroupArgs): BuiltCustomGroup => {
   }
 }
 
-interface CustomGroupAccumulator {
+interface GroupPass {
   readonly outbounds: ReadonlyArray<Outbound>
-  readonly entries: ReadonlyArray<TagEntry>
+  readonly entries: ReadonlyArray<Candidate>
+  readonly emittedIds: ReadonlySet<string>
   readonly warnings: ReadonlyArray<ConversionWarning>
-  readonly hardFail: boolean
+  readonly errors: ReadonlyArray<EmptyCustomGroupError>
 }
 
-const emptyCustomAccumulator: CustomGroupAccumulator = {
-  outbounds: [],
-  entries: [],
-  warnings: [],
-  hardFail: false,
+const setsEqual = (
+  left: ReadonlySet<string>,
+  right: ReadonlySet<string>,
+): boolean =>
+  left.size === right.size && [...left].every((value) => right.has(value))
+
+// Custom groups may reference each other (`includeCustomGroups` / typed
+// `customGroup` members). Resolve to a fixpoint so the result does not depend on
+// definition order (Nix attribute sets are sorted alphabetically).
+const buildGroups = (
+  entries: ReadonlyArray<readonly [string, CustomGroup]>,
+  scope: string,
+  candidateSubscription: string,
+  makeTag: (id: string) => string,
+  proxyCandidates: ReadonlyArray<Candidate>,
+  nativeCandidates: ReadonlyArray<Candidate>,
+  externalCustomCandidates: ReadonlyArray<Candidate>,
+): GroupPass => {
+  const buildOnce = (availableIds: ReadonlySet<string>): GroupPass => {
+    const customCandidates: ReadonlyArray<Candidate> = [
+      ...externalCustomCandidates,
+      ...entries.flatMap(([id]) =>
+        availableIds.has(id)
+          ? [
+              {
+                subscription: candidateSubscription,
+                name: id,
+                tag: makeTag(id),
+              },
+            ]
+          : [],
+      ),
+    ]
+    const results = entries.map(([id, group]) => ({
+      id,
+      built: buildCustomGroup({
+        scope,
+        id,
+        tag: makeTag(id),
+        group,
+        proxyCandidates,
+        nativeCandidates,
+        customCandidates,
+      }),
+    }))
+    return {
+      outbounds: results.flatMap((result) =>
+        result.built.outbound === undefined ? [] : [result.built.outbound],
+      ),
+      entries: results.flatMap((result) =>
+        result.built.entry === undefined
+          ? []
+          : [
+              {
+                subscription: candidateSubscription,
+                name: result.id,
+                tag: makeTag(result.id),
+              },
+            ],
+      ),
+      emittedIds: new Set(
+        results.flatMap((result) =>
+          result.built.entry === undefined ? [] : [result.id],
+        ),
+      ),
+      warnings: results.flatMap((result) => result.built.warnings),
+      errors: results.flatMap((result) =>
+        result.built.error === undefined ? [] : [result.built.error],
+      ),
+    }
+  }
+  const iterate = (
+    availableIds: ReadonlySet<string>,
+    remaining: number,
+  ): GroupPass => {
+    const pass = buildOnce(availableIds)
+    return remaining <= 0 || setsEqual(pass.emittedIds, availableIds)
+      ? pass
+      : iterate(pass.emittedIds, remaining - 1)
+  }
+  return iterate(new Set<string>(), entries.length + 1)
 }
 
 export const convertSubscription = (
@@ -401,39 +481,19 @@ export const convertSubscription = (
     }),
   )
 
-  const built =
-    Object.entries(subscription.groups.custom).reduce<CustomGroupAccumulator>(
-      (accumulator, [id, group]) => {
-        const customCandidates: ReadonlyArray<Candidate> =
-          accumulator.entries.map((entry) => ({
-            subscription: subscription.name,
-            name: entry.original,
-            tag: entry.tag,
-          }))
-        const result = buildCustomGroup({
-          scope: `subscriptions.${subscription.id}`,
-          id,
-          tag: formatTag(format, subscription.name, id),
-          group,
-          proxyCandidates,
-          nativeCandidates,
-          customCandidates,
-        })
-        return {
-          outbounds:
-            result.outbound === undefined
-              ? accumulator.outbounds
-              : [...accumulator.outbounds, result.outbound],
-          entries:
-            result.entry === undefined
-              ? accumulator.entries
-              : [...accumulator.entries, result.entry],
-          warnings: [...accumulator.warnings, ...result.warnings],
-          hardFail: accumulator.hardFail || result.error !== undefined,
-        }
-      },
-      emptyCustomAccumulator,
-    )
+  const built = buildGroups(
+    Object.entries(subscription.groups.custom),
+    `subscriptions.${subscription.id}`,
+    subscription.name,
+    (id) => formatTag(format, subscription.name, id),
+    proxyCandidates,
+    nativeCandidates,
+    [],
+  )
+  const customEntries: ReadonlyArray<TagEntry> = built.entries.map((entry) => ({
+    original: entry.name,
+    tag: entry.tag,
+  }))
 
   const nativeWithOutbounds = nativeConversions.filter(
     ({ conversion }) => conversion.outbound !== undefined,
@@ -460,7 +520,7 @@ export const convertSubscription = (
   ]
 
   if (
-    built.hardFail ||
+    built.errors.length > 0 ||
     (subscription.onUnsupported === "fail" && warnings.length > 0)
   ) {
     return Effect.fail(
@@ -480,22 +540,8 @@ export const convertSubscription = (
     warnings,
     proxies,
     nativeGroups: nativeKept,
-    customGroups: built.entries,
+    customGroups: customEntries,
   })
-}
-
-interface InstanceAccumulator {
-  readonly outbounds: ReadonlyArray<Outbound>
-  readonly emitted: ReadonlyArray<Candidate>
-  readonly warnings: ReadonlyArray<ConversionWarning>
-  readonly error: EmptyCustomGroupError | undefined
-}
-
-const emptyInstanceAccumulator: InstanceAccumulator = {
-  outbounds: [],
-  emitted: [],
-  warnings: [],
-  error: undefined,
 }
 
 export const assembleFragment = (
@@ -527,63 +573,66 @@ export const assembleFragment = (
       })),
     )
 
-  const built = Object.entries(config.groups.custom).reduce<InstanceAccumulator>(
-    (accumulator, [id, group]) => {
-      const customCandidates: ReadonlyArray<Candidate> = [
-        ...subscriptionCustomCandidates,
-        ...accumulator.emitted,
-      ]
-      const result = buildCustomGroup({
-        scope: "groups",
-        id,
-        tag: id,
-        group,
-        proxyCandidates,
-        nativeCandidates,
-        customCandidates,
-      })
-      return {
-        outbounds:
-          result.outbound === undefined
-            ? accumulator.outbounds
-            : [...accumulator.outbounds, result.outbound],
-        emitted:
-          result.entry === undefined
-            ? accumulator.emitted
-            : [
-                ...accumulator.emitted,
-                {
-                  subscription: InstanceSubscription,
-                  name: id,
-                  tag: id,
-                },
-              ],
-        warnings: [...accumulator.warnings, ...result.warnings],
-        error: accumulator.error ?? result.error,
-      }
-    },
-    emptyInstanceAccumulator,
+  const built = buildGroups(
+    Object.entries(config.groups.custom),
+    "groups",
+    InstanceSubscription,
+    (id) => id,
+    proxyCandidates,
+    nativeCandidates,
+    subscriptionCustomCandidates,
   )
 
-  const baseOutbounds: ReadonlyArray<Outbound> = [
-    ...fragments.flatMap((fragment) => fragment.fragment.outbounds),
+  const nativeTags = new Set(
+    fragments.flatMap((fragment) =>
+      fragment.nativeGroups.map((entry) => entry.tag),
+    ),
+  )
+  const customTags = new Set(
+    fragments.flatMap((fragment) =>
+      fragment.customGroups.map((entry) => entry.tag),
+    ),
+  )
+
+  const classified = fragments.flatMap((fragment) =>
+    fragment.fragment.outbounds.map((outbound) => ({
+      outbound,
+      kind: customTags.has(outbound.tag)
+        ? ("custom" as const)
+        : nativeTags.has(outbound.tag)
+          ? ("native" as const)
+          : ("proxy" as const),
+    })),
+  )
+
+  // Requested order: custom groups > direct > block > native groups > proxies.
+  const outbounds: ReadonlyArray<Outbound> = [
+    ...classified.flatMap((item) =>
+      item.kind === "custom" ? [item.outbound] : [],
+    ),
     ...built.outbounds,
+    ...(config.convert.emitBuiltinOutbounds
+      ? [
+          { type: "direct" as const, tag: "direct" },
+          { type: "block" as const, tag: "block" },
+        ]
+      : []),
+    ...classified.flatMap((item) =>
+      item.kind === "native" ? [item.outbound] : [],
+    ),
+    ...classified.flatMap((item) =>
+      item.kind === "proxy" ? [item.outbound] : [],
+    ),
   ]
-  const outbounds: ReadonlyArray<Outbound> = config.convert.emitBuiltinOutbounds
-    ? [
-        { type: "direct", tag: "direct" },
-        { type: "block", tag: "block" },
-        ...baseOutbounds,
-      ]
-    : baseOutbounds
 
   const tags = outbounds.map((outbound) => outbound.tag)
   const duplicates = dedupe(
     tags.filter((tag, index) => tags.indexOf(tag) !== index),
   )
 
-  if (built.error !== undefined) {
-    return Effect.fail(built.error)
+  const firstError = built.errors[0]
+  if (firstError !== undefined) {
+    return Effect.fail(firstError)
   }
   if (duplicates.length > 0) {
     return Effect.fail(new DuplicateTagError({ tags: duplicates }))
