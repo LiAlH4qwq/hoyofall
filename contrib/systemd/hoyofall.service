@@ -1,0 +1,29 @@
+[Unit]
+Description=hoyofall - mihomo (Clash.Meta) to sing-box fragment converter
+Documentation=https://github.com/LiAlH4qwq/hoyofall
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Adjust the binary path if you did not install to /usr/local/bin.
+ExecStart=/usr/local/bin/hoyofall --config /etc/hoyofall/config.yaml
+# Holds urlEnv subscription tokens; the leading "-" makes it optional.
+EnvironmentFile=-/etc/hoyofall/hoyofall.env
+Restart=on-failure
+RestartSec=5
+
+DynamicUser=yes
+StateDirectory=hoyofall
+StateDirectoryMode=0700
+WorkingDirectory=/var/lib/hoyofall
+ReadWritePaths=/var/lib/hoyofall
+
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target

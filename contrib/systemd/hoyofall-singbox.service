@@ -1,0 +1,13 @@
+[Unit]
+Description=Inject the hoyofall fragment into sing-box
+Documentation=https://github.com/LiAlH4qwq/hoyofall
+After=hoyofall.service
+Wants=hoyofall.service
+
+[Service]
+Type=oneshot
+# Copy the fragment into sing-box's config directory. Adjust both paths and
+# the `install` binary (/bin/install on some distributions) to match your
+# setup, and point sing-box at the directory with `-C`.
+ExecStart=/usr/bin/install -m 0644 -D -T /var/lib/hoyofall/fragment.json /etc/sing-box/config.d/zz-hoyofall.json
+ExecStartPost=/usr/bin/systemctl try-restart sing-box.service
