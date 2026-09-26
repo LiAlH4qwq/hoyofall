@@ -2,8 +2,8 @@
 #
 # Copy to config.yaml and edit. `config.yaml` is gitignored so local secrets
 # never get committed. Every option below is annotated with its default value;
-# the same reference (with types) lives in README.md. The JSON Schema is
-# available via `hoyofall --print-schema`.
+# the same reference (with types) lives in docs/configuration.md. The JSON
+# Schema is available via `hoyofall --print-schema`.
 #
 # Groups: instance-level `groups.custom` is the recommended way to build
 # selector/urltest groups (sing-box cannot match outbounds by regex, so hoyofall

@@ -1,0 +1,12 @@
+[Unit]
+Description=Re-inject the hoyofall fragment when it changes
+Documentation=https://github.com/LiAlH4qwq/hoyofall
+After=hoyofall.service
+
+[Path]
+# Watch the directory, not the file: hoyofall writes atomically (tmp + rename),
+# which replaces the inode. Adjust the path to match output.file.path.
+PathChanged=/var/lib/hoyofall
+
+[Install]
+WantedBy=multi-user.target
