@@ -39,7 +39,7 @@ Options: `--arch arm64|x86_64`, `--features LIST`, `--jobs N`, `--out DIR`,
 1. checks `cargo` and, with rustup, ensures the Rust Android target is installed;
 2. downloads and checksum-verifies `nushell-<version>.tar.gz` into `android/.cache`;
 3. extracts it under `android/build/nushell-<arch>`;
-4. applies `patches/termux/*.patch` (see `patches/README.md`);
+4. applies `patches/termux/*.patch` (see [`patches/README.md`](./patches/README.md));
 5. sets `CC_/CXX_/AR_/CARGO_TARGET_*_LINKER` to the NDK toolchain and runs
    `cargo build --release --target <triple> --no-default-features`;
 6. strips and stages `nu` (plus `libc++_shared.so` when the binary links it).

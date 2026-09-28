@@ -1,4 +1,4 @@
-import { Effect, Exit, Schema } from "effect"
+import { Effect, Either, Exit, Schema } from "effect"
 import { describe, expect, it } from "vitest"
 import type { ResolvedConfig, ResolvedSubscription } from "../src/config/load"
 import {
@@ -317,5 +317,129 @@ describe("instance-level custom groups", () => {
       assembleFragment(config, [make("a"), make("b")]),
     )
     expect(Exit.isFailure(exit)).toBe(true)
+  })
+
+  it("scopes typed members by includeSubRegexes", () => {
+    const a = convert(subscription("a", noGroups), fixture)
+    const b = convert(subscription("b", noGroups), fixture)
+    const config = instanceConfig({
+      pick: customGroup({
+        includeProxies: false,
+        includeSubRegexes: ["^a$"],
+        members: [
+          { type: "proxy", subscription: "a", name: "HK-1" },
+          { type: "proxy", subscription: "b", name: "US-1" },
+        ],
+      }),
+    })
+    const assembled = Effect.runSync(assembleFragment(config, [a, b]))
+    expect(
+      assembled.fragment.outbounds.find((outbound) => outbound.tag === "pick"),
+    ).toMatchObject({ outbounds: ["a-HK-1"] })
+  })
+
+  it("resolves a selector default to a typed member or a builtin", () => {
+    const a = convert(subscription("a", noGroups), fixture)
+    const byMember = Effect.runSync(
+      assembleFragment(
+        instanceConfig({
+          pick: customGroup({
+            includeProxies: false,
+            members: [{ type: "proxy", subscription: "a", name: "HK-1" }],
+            includeDirect: true,
+            default: "HK-1",
+          }),
+        }),
+        [a],
+      ),
+    )
+    expect(
+      byMember.fragment.outbounds.find((outbound) => outbound.tag === "pick"),
+    ).toMatchObject({ outbounds: ["a-HK-1", "direct"], default: "a-HK-1" })
+
+    const byBuiltin = Effect.runSync(
+      assembleFragment(
+        instanceConfig({
+          pick: customGroup({
+            includeProxies: false,
+            members: [{ type: "proxy", subscription: "a", name: "HK-1" }],
+            includeDirect: true,
+            default: "direct",
+          }),
+        }),
+        [a],
+      ),
+    )
+    expect(
+      byBuiltin.fragment.outbounds.find((outbound) => outbound.tag === "pick"),
+    ).toMatchObject({ outbounds: ["a-HK-1", "direct"], default: "direct" })
+  })
+
+  it("reports every failing empty group at once", () => {
+    const a = convert(subscription("a", noGroups), fixture)
+    const config = instanceConfig({
+      one: customGroup({ includeRegexes: ["^ZZZ"], onEmpty: "fail" }),
+      two: customGroup({ includeRegexes: ["^YYY"], onEmpty: "fail" }),
+    })
+    const either = Effect.runSync(Effect.either(assembleFragment(config, [a])))
+    expect(Either.isLeft(either)).toBe(true)
+    if (Either.isLeft(either)) {
+      expect(either.left._tag).toBe("EmptyCustomGroupsError")
+      expect(
+        either.left._tag === "EmptyCustomGroupsError"
+          ? either.left.groups.map((group) => group.group)
+          : [],
+      ).toEqual(["one", "two"])
+    }
+  })
+})
+
+describe("native group mappings", () => {
+  const payload = `
+proxies:
+  - { name: "HK-1", type: ss, server: 1.1.1.1, port: 8388, cipher: aes-256-gcm, password: p }
+  - { name: "HK-2", type: ss, server: 1.1.1.2, port: 8388, cipher: aes-256-gcm, password: p }
+proxy-groups:
+  - { name: "auto", type: url-test, proxies: ["HK-1", "HK-2"], url: "http://x", interval: 300, tolerance: 20 }
+  - { name: "fb", type: fallback, proxies: ["HK-1"], url: "http://y" }
+  - { name: "lb", type: load-balance, proxies: ["HK-1", "HK-2"], url: "http://z" }
+`
+
+  const native = (
+    fallback: "urltest" | "skip",
+    loadBalance: "selector" | "urltest" | "skip",
+  ): SubscriptionGroups => ({
+    native: { ...defaultNativeGroupOptions, enable: true, fallback, loadBalance },
+    custom: {},
+  })
+
+  it("maps url-test, fallback and load-balance", () => {
+    const result = convert(subscription("sub", native("urltest", "selector")), payload)
+    expect(
+      result.fragment.outbounds.find((outbound) => outbound.tag === "sub-auto"),
+    ).toMatchObject({
+      type: "urltest",
+      url: "http://x",
+      interval: "300s",
+      tolerance: 20,
+    })
+    expect(
+      result.fragment.outbounds.find((outbound) => outbound.tag === "sub-fb"),
+    ).toMatchObject({ type: "urltest", url: "http://y" })
+    expect(
+      result.fragment.outbounds.find((outbound) => outbound.tag === "sub-lb"),
+    ).toMatchObject({ type: "selector" })
+  })
+
+  it("honours skip and urltest mappings", () => {
+    const skipped = convert(subscription("sub", native("skip", "skip")), payload)
+    const tags = skipped.fragment.outbounds.map((outbound) => outbound.tag)
+    expect(tags).not.toContain("sub-fb")
+    expect(tags).not.toContain("sub-lb")
+
+    const urltest = convert(subscription("sub", native("skip", "urltest")), payload)
+    expect(
+      urltest.fragment.outbounds.find((outbound) => outbound.tag === "sub-lb"),
+    ).toMatchObject({ type: "urltest", url: "http://z" })
   })
 })

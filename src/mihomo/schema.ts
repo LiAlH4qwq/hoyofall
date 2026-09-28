@@ -60,17 +60,6 @@ export const Ss = Schema.Struct({
   "udp-over-tcp": Schema.optional(Schema.Boolean),
 })
 
-export const Ssr = Schema.Struct({
-  ...CommonProxy,
-  type: Schema.Literal("ssr"),
-  cipher: Schema.String,
-  password: Schema.String,
-  protocol: Schema.String,
-  obfs: Schema.String,
-  "protocol-param": Schema.optional(Schema.String),
-  "obfs-param": Schema.optional(Schema.String),
-})
-
 export const Vmess = Schema.Struct({
   ...CommonProxy,
   type: Schema.Literal("vmess"),

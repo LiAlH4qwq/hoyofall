@@ -11,5 +11,9 @@ offline-capable. `build.nu` applies them in sorted filename order with
 `patch -p1`; they are tuned to the Node version pinned in `versions.lock`, so
 bumping Node means re-vendoring this set from the matching Termux revision.
 
+Termux's license places package patches under the license of the package they
+build, so these patches are MIT (Node.js). See
+[`THIRD_PARTY_LICENSES.md`](../../../THIRD_PARTY_LICENSES.md).
+
 Files that only touch `test-*` were intentionally not vendored: they do not
 affect the shipped binary.

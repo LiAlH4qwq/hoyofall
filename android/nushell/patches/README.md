@@ -14,3 +14,7 @@ never compiled.
 
 `build.nu` applies every `*.patch` here in sorted order with `patch -p1`.
 Bumping Nushell means re-vendoring the matching Termux revision.
+
+Termux's license places package patches under the license of the package they
+build, so this patch is MIT (Nushell). See
+[`THIRD_PARTY_LICENSES.md`](../../../THIRD_PARTY_LICENSES.md).

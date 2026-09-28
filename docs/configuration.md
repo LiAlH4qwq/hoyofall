@@ -42,7 +42,7 @@ explicit tags. The final tag of an instance-level group is its id verbatim.
 | `.type` | `"selector"` \| `"urltest"` | `"selector"` | Group kind. |
 | `.includeProxies` | boolean | `true` | Consider proxies. |
 | `.includeNativeGroups` | boolean | `false` | Consider converted native groups. |
-| `.includeCustomGroups` | boolean | `false` | Consider per-subscription custom groups and previously-defined instance groups. |
+| `.includeCustomGroups` | boolean | `false` | Consider per-subscription custom groups and other instance groups (resolution is order-independent). |
 | `.includeSubRegexes` | regex string array | `[]` | Keep candidates from subscriptions whose `name` matches any regex; empty = all. |
 | `.excludeSubRegexes` | regex string array | `[]` | Drop candidates from subscriptions whose `name` matches any regex. |
 | `.includeRegexes` | regex string array | `[]` | Keep entity names matching any regex; empty = all. |
@@ -51,7 +51,7 @@ explicit tags. The final tag of an instance-level group is its id verbatim.
 | `.includeDirect` | boolean | `false` | Append `direct`. |
 | `.includeBlock` | boolean | `false` | Append `block`. |
 | `.onEmpty` | `"skip"` \| `"fail"` | `"skip"` | Behaviour when no member matches. |
-| `.default` | string \| null | `null` | `selector` default member name. |
+| `.default` | string \| null | `null` | `selector` default member tag; may name a resolved member, another custom group, or `direct`/`block`. |
 | `.interruptExistConnections` | boolean | `false` | Maps to `interrupt_exist_connections`. |
 | `.url` | string | `"http://www.gstatic.com/generate_204"` | `urltest` probe URL. |
 | `.intervalSeconds` | integer > 0 | `300` | `urltest` interval. |
@@ -97,7 +97,7 @@ The map key is the subscription id — it is also the default display name and t
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `exclude` | regex string array | `[]` | Drop proxies whose original name matches any regex. |
+| `exclude` | regex string array | `[]` | Drop proxies and native groups whose original name matches any regex. |
 
 ### `subscriptions.<id>.groups` (advanced)
 

@@ -58,6 +58,7 @@ interface TransportInputs {
         readonly headers?: Record<string, StringOrNumber> | undefined
         readonly "max-early-data"?: number | undefined
         readonly "early-data-header-name"?: string | undefined
+        readonly "v2ray-http-upgrade"?: boolean | undefined
       }
     | undefined
   readonly grpc: { readonly "grpc-service-name"?: string | undefined } | undefined
@@ -72,18 +73,33 @@ interface TransportInputs {
     | undefined
 }
 
+const httpUpgrade = (
+  ws: TransportInputs["ws"],
+): SingboxTransport => {
+  const host = ws?.headers?.Host
+  return {
+    type: "httpupgrade",
+    host: host === undefined ? undefined : String(host),
+    path: ws?.path,
+  }
+}
+
 export const buildTransport = (
   input: TransportInputs,
 ): SingboxTransport | undefined => {
   switch (input.network) {
     case "ws":
-      return {
-        type: "ws",
-        path: input.ws?.path,
-        headers: normalizeHeaders(input.ws?.headers),
-        max_early_data: input.ws?.["max-early-data"],
-        early_data_header_name: input.ws?.["early-data-header-name"],
-      }
+      return input.ws?.["v2ray-http-upgrade"] === true
+        ? httpUpgrade(input.ws)
+        : {
+            type: "ws",
+            path: input.ws?.path,
+            headers: normalizeHeaders(input.ws?.headers),
+            max_early_data: input.ws?.["max-early-data"],
+            early_data_header_name: input.ws?.["early-data-header-name"],
+          }
+    case "httpupgrade":
+      return httpUpgrade(input.ws)
     case "grpc":
       return {
         type: "grpc",

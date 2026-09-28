@@ -3,15 +3,13 @@
 # nixpkgs' Android cross toolchain (`pkgsCross.aarch64-android*`) is not in the
 # binary cache and is broken when built from source (compiler-rt, tzdata, …), and
 # a sandboxed build of Node/Nushell for Android needs an online Rust target. So
-# the flashable module is assembled from **prebuilt Termux aarch64 binaries**,
-# fetched as fixed-output derivations (so all downloads happen before the build
-# and the build phases run offline).
+# the all-in-one flashable module is assembled from **prebuilt binaries**:
+# Termux aarch64 packages (Node, Nushell, libraries) plus the upstream sing-box
+# Android build, fetched as fixed-output derivations so every download happens
+# before the build and the build phases run offline.
 #
 # `devShell` remains available for building the pinned subprojects from source
 # against an NDK (`nu android/build.nu`).
-#
-# Pinned package versions/hashes are from the Termux `stable` aarch64 index; see
-# docs/android.md for how to refresh them.
 {
   pkgs,
   lib,
@@ -54,6 +52,11 @@ let
     caDeb
   ];
 
+  singbox = pkgs.fetchurl {
+    url = "https://github.com/SagerNet/sing-box/releases/download/v1.14.2/sing-box-1.14.2-android-arm64.tar.gz";
+    hash = "sha256-V+64GGeppeQGvLtff941Ks3DVOjAhBc6KL3ZQXxeDLo=";
+  };
+
   cleanedSrc = lib.cleanSourceWith {
     src = src;
     filter =
@@ -78,20 +81,25 @@ let
           pkgs.coreutils
           pkgs.xz
           pkgs.zstd
+          pkgs.gnutar
+          pkgs.gzip
           pkgs.nushell
           pkgs.zip
         ];
         passthru = {
-          inherit runtimeDebs;
+          inherit runtimeDebs singbox;
         };
         meta = {
-          description = "hoyofall flashable module for Android (arm64, prebuilt Termux payload)";
+          description = "hoyofall all-in-one flashable module for Android (arm64)";
+          # The module aggregates MIT hoyofall with bundled third-party binaries;
+          # sing-box is GPL-3.0-or-later. See THIRD_PARTY_LICENSES.md.
+          license = with lib.licenses; [ mit gpl3Plus apache2 mpl20 ];
           platforms = lib.platforms.unix;
         };
       }
       ''
-            export HOME=$TMPDIR
-            prefix=${termuxPrefix}
+        export HOME=$TMPDIR
+        prefix=${termuxPrefix}
 
         i=0
         for archive in ${lib.concatStringsSep " " runtimeDebs}; do
@@ -100,10 +108,10 @@ let
           dpkg-deb -x "$archive" "$TMPDIR/x/$i"
         done
 
-            node=$(find "$TMPDIR/x" -path "*/$prefix/bin/node" -type f | head -n1)
-            nu=$(find "$TMPDIR/x" -path "*/$prefix/bin/nu" -type f | head -n1)
-            cert=$(find "$TMPDIR/x" -path "*/$prefix/etc/tls/cert.pem" -type f | head -n1)
-            [[ -n "$node" && -n "$nu" && -n "$cert" ]]
+        node=$(find "$TMPDIR/x" -path "*/$prefix/bin/node" -type f | head -n1)
+        nu=$(find "$TMPDIR/x" -path "*/$prefix/bin/nu" -type f | head -n1)
+        cert=$(find "$TMPDIR/x" -path "*/$prefix/etc/tls/cert.pem" -type f | head -n1)
+        [[ -n "$node" && -n "$nu" && -n "$cert" ]]
 
         mkdir -p "$TMPDIR/prebuilt/lib"
         # Exact SONAMEs the binaries need (see `readelf -d`); dereference symlinks
@@ -115,25 +123,35 @@ let
           cp -L "$source" "$TMPDIR/prebuilt/lib/$name"
         done
 
-            nu --no-config-file ${cleanedSrc}/android/build.nu \
-              --root ${cleanedSrc} \
-              --stage-only \
-              --arch arm64 \
-              --node-bin "$node" \
-              --nu-bin "$nu" \
-              --bundle ${hoyofall}/lib/hoyofall/index.js \
-              --schema ${hoyofall}/share/hoyofall/schema.json \
-              --lib-dir "$TMPDIR/prebuilt/lib" \
-              --cert "$cert" \
-              --out "$TMPDIR/module"
+        mkdir -p "$TMPDIR/singbox"
+        tar -xzf ${singbox} -C "$TMPDIR/singbox"
+        singboxBin=$(find "$TMPDIR/singbox" -name sing-box -type f | head -n1)
+        [[ -n "$singboxBin" ]]
 
-            mkdir -p "$out"
-            cp -a "$TMPDIR/module" "$out/module"
+        nu --no-config-file ${cleanedSrc}/android/build.nu \
+          --root ${cleanedSrc} \
+          --stage-only \
+          --arch arm64 \
+          --node-bin "$node" \
+          --nu-bin "$nu" \
+          --singbox-bin "$singboxBin" \
+          --bundle ${hoyofall}/lib/hoyofall/index.js \
+          --schema ${hoyofall}/share/hoyofall/schema.json \
+          --lib-dir "$TMPDIR/prebuilt/lib" \
+          --cert "$cert" \
+          --out "$TMPDIR/module"
 
-            nu --no-config-file ${cleanedSrc}/android/package.nu \
-              --root ${cleanedSrc} \
-              --input "$TMPDIR/module" \
-              --out "$out/hoyofall-android-arm64.zip"
+        # Use the bundled WebUI built by the hoyofall derivation (adds app.js).
+        rm -rf "$TMPDIR/module/webroot"
+        cp -a ${hoyofall}/share/hoyofall/webroot "$TMPDIR/module/webroot"
+
+        mkdir -p "$out"
+        cp -a "$TMPDIR/module" "$out/module"
+
+        nu --no-config-file ${cleanedSrc}/android/package.nu \
+          --root ${cleanedSrc} \
+          --input "$TMPDIR/module" \
+          --out "$out/hoyofall-android-arm64.zip"
       '';
 
   devShell = pkgs.mkShell {
@@ -157,5 +175,5 @@ let
   };
 in
 {
-  inherit module devShell runtimeDebs;
+  inherit module devShell runtimeDebs singbox;
 }

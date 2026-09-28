@@ -66,6 +66,10 @@ export class EmptyCustomGroupError extends Data.TaggedError("EmptyCustomGroupErr
   readonly samples: ReadonlyArray<string>
 }> {}
 
+export class EmptyCustomGroupsError extends Data.TaggedError("EmptyCustomGroupsError")<{
+  readonly groups: ReadonlyArray<EmptyCustomGroupError>
+}> {}
+
 export class DuplicateTagError extends Data.TaggedError("DuplicateTagError")<{
   readonly tags: ReadonlyArray<string>
 }> {}
@@ -77,15 +81,6 @@ export class StrictConversionError extends Data.TaggedError("StrictConversionErr
 
 export class OutputWriteError extends Data.TaggedError("OutputWriteError")<{
   readonly path: string
-  readonly cause: unknown
-}> {}
-
-export class NoOutputEnabledError extends Data.TaggedError("NoOutputEnabledError")<{
-  readonly message: string
-}> {}
-
-export class HttpServerError extends Data.TaggedError("HttpServerError")<{
-  readonly message: string
   readonly cause: unknown
 }> {}
 

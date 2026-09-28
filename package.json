@@ -8,7 +8,8 @@
     "hoyofall": "./dist/index.js"
   },
   "scripts": {
-    "build": "rolldown -c rolldown.config.ts && node dist/index.js --print-schema > dist/schema.json",
+    "build": "rolldown -c rolldown.config.ts && node dist/index.js --print-schema > dist/schema.json && pnpm run build:webui",
+    "build:webui": "rolldown -c android/webui/rolldown.config.ts",
     "gen:schema": "tsx scripts/gen-schema.ts",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",

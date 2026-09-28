@@ -10,8 +10,15 @@ result-*
 config.yaml
 config.local.yaml
 
+# Default fragment output (generated; may contain proxy credentials)
+hoyofall.json
+
 # Android cross-compilation scratch and staged payloads
 android/.cache/
 android/build/
 android/dist/
+
+# Generated WebUI bundle (source lives in android/webui/)
+android/module/webroot/app.js
+android/module/webroot/app.js.map
 

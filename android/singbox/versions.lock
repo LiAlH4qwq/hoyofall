@@ -1,0 +1,7 @@
+# Pinned inputs for the prebuilt sing-box Android payload.
+# Parsed by fetch.nu with `open --raw | from toml`.
+
+singbox_version = "1.14.2"
+singbox_url = "https://github.com/SagerNet/sing-box/releases/download/v1.14.2/sing-box-1.14.2-android-arm64.tar.gz"
+singbox_sha256 = "57eeb81867a9a5e406bcbb5f7fde352acdc354e8c084173a28bdd9417c5e0cba"
+default_arch = "arm64"

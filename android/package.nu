@@ -22,7 +22,8 @@ def main [
     _ => { error make { msg: $"unsupported --arch ($arch): use arm64 or x86_64" } }
   })
   let input = (if $input != "" { $input } else { $root | path join "android" "dist" $"module-($arch)" })
-  let out = (if $out != "" { $out } else { $root | path join "android" "dist" $"hoyofall-android-($arch).zip" })
+  # Resolve to an absolute path before `cd`-ing into the input directory.
+  let out = (if $out != "" { $out | path expand } else { $root | path join "android" "dist" $"hoyofall-android-($arch).zip" })
 
   if not ($input | path exists) {
     error make { msg: $"($input) does not exist; run `nu android/build.nu` first" }

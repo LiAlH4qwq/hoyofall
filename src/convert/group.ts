@@ -79,6 +79,30 @@ const resolveMembers = (
   }
 }
 
+const selectorOutbound = (
+  tag: string,
+  members: ReadonlyArray<string>,
+): Outbound => ({
+  type: "selector",
+  tag,
+  outbounds: members,
+})
+
+const urlTestOutbound = (
+  tag: string,
+  members: ReadonlyArray<string>,
+  url: string | undefined,
+  intervalSeconds: number | undefined,
+  tolerance: number | undefined,
+): Outbound => ({
+  type: "urltest",
+  tag,
+  outbounds: members,
+  url,
+  interval: intervalSeconds === undefined ? undefined : `${intervalSeconds}s`,
+  tolerance,
+})
+
 export const convertGroup = (input: GroupConvertInput): GroupConversion => {
   const { group, tag, resolve } = input
   const { members, missing } = resolveMembers(group, resolve)
@@ -89,42 +113,29 @@ export const convertGroup = (input: GroupConvertInput): GroupConversion => {
 
   switch (group.type) {
     case "select":
-      return {
-        outbound: {
-          type: "selector",
-          tag,
-          outbounds: members,
-        },
-        missing,
-      }
+      return { outbound: selectorOutbound(tag, members), missing }
     case "url-test":
       return {
-        outbound: {
-          type: "urltest",
+        outbound: urlTestOutbound(
           tag,
-          outbounds: members,
-          url: group.url,
-          interval:
-            group.interval === undefined ? undefined : `${group.interval}s`,
-          tolerance: group.tolerance,
-        },
+          members,
+          group.url,
+          group.interval,
+          group.tolerance,
+        ),
         missing,
       }
     case "fallback":
       return input.fallback === "skip"
         ? { outbound: undefined, missing }
         : {
-            outbound: {
-              type: "urltest",
+            outbound: urlTestOutbound(
               tag,
-              outbounds: members,
-              url: group.url,
-              interval:
-                group.interval === undefined
-                  ? undefined
-                  : `${group.interval}s`,
-              tolerance: group.tolerance,
-            },
+              members,
+              group.url,
+              group.interval,
+              group.tolerance,
+            ),
             missing,
           }
     case "load-balance":
@@ -133,28 +144,17 @@ export const convertGroup = (input: GroupConvertInput): GroupConversion => {
           return { outbound: undefined, missing }
         case "urltest":
           return {
-            outbound: {
-              type: "urltest",
+            outbound: urlTestOutbound(
               tag,
-              outbounds: members,
-              url: group.url,
-              interval:
-                group.interval === undefined
-                  ? undefined
-                  : `${group.interval}s`,
-              tolerance: group.tolerance,
-            },
+              members,
+              group.url,
+              group.interval,
+              group.tolerance,
+            ),
             missing,
           }
         case "selector":
-          return {
-            outbound: {
-              type: "selector",
-              tag,
-              outbounds: members,
-            },
-            missing,
-          }
+          return { outbound: selectorOutbound(tag, members), missing }
       }
   }
 }

@@ -38,6 +38,14 @@ def sha256-of [path: path] {
   open $path --raw | hash sha256
 }
 
+def revision-parts [revision: string] {
+  let parts = ($revision | split row ".")
+  {
+    major: ($parts | first | into int)
+    minor: (if ($parts | length) > 1 { $parts | get 1 } else { "0" } | into int)
+  }
+}
+
 def main [
   --root: string = ""        # repository root (defaults to this script's repo)
   --source: string = ""      # use an already-extracted Node source tree
@@ -82,6 +90,12 @@ def main [
     | split row "="
     | last
     | str trim)
+  let required = (revision-parts $lock.ndk_revision_min)
+  let current = (revision-parts $revision)
+  if ($current.major < $required.major)
+    or (($current.major == $required.major) and ($current.minor < $required.minor)) {
+    error make { msg: $"NDK ($revision) is older than the required >= ($lock.ndk_revision_min)" }
+  }
   print -e $"NDK ($ndk) revision ($revision), Node ($lock.node_version), arch ($arch), api ($api)"
 
   let toolchain = ($ndk | path join "toolchains" "llvm" "prebuilt" $host)
@@ -138,11 +152,15 @@ def main [
   $env.CXX = $cxx
   $env.ANDROID_NDK_ROOT = $ndk
   $env.GYP_DEFINES = $"target_arch=($mapping.gyp_arch) v8_target_arch=($mapping.gyp_arch) android_target_arch=($mapping.gyp_arch) host_os=($host) OS=android android_ndk_path=($ndk)"
-  let intlFlag = (if $intl == "small" { "--with-intl=small-icu" } else { "--without-intl" })
+  let intlFlag = (match $intl {
+    "none" => "--without-intl"
+    "small" => "--with-intl=small-icu"
+    _ => { error make { msg: $"unsupported --intl ($intl): use none or small" } }
+  })
 
   cd $src
   print -e $"configuring Node ($lock.node_version)"
-  ^./configure --dest-cpu=$mapping.dest_cpu --dest-os=android --openssl-no-asm --cross-compiling --without-npm $intlFlag
+  ^./configure $"--dest-cpu=($mapping.dest_cpu)" --dest-os=android --openssl-no-asm --cross-compiling --without-npm $intlFlag
   check $env.LAST_EXIT_CODE "configure"
 
   print -e $"building Node with ($jobs) jobs"

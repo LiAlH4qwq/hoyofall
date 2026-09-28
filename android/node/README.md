@@ -29,9 +29,11 @@ Options: `--arch arm64|x86_64`, `--intl none|small`, `--jobs N`,
 
 1. downloads and checksum-verifies `node-v<version>.tar.xz` into `android/.cache`;
 2. extracts it under `android/build/node-<arch>`;
-3. applies every `patches/termux/*.patch` (see `patches/README.md`);
+3. applies every `patches/termux/*.patch` (see [`patches/README.md`](./patches/README.md));
 4. configures with `--dest-os=android --openssl-no-asm --cross-compiling
-   --without-npm --without-intl` and the NDK `clang`/`clang++` toolchain;
+   --without-npm` and either `--without-intl` (default) or, with
+   `--intl small`, `--with-intl=small-icu`, plus the NDK `clang`/`clang++`
+   toolchain;
 5. builds, strips with `llvm-strip`, and stages `node` (plus
    `libc++_shared.so` when the binary links it).
 
@@ -42,4 +44,4 @@ The module launcher sets `LD_LIBRARY_PATH` to the staged `lib/` directory.
 Node does not support Android upstream. The vendored patches are the Termux
 `packages/nodejs` set, which is the maintained Android build of Node; pinning
 them (rather than a floating download) keeps the build reproducible. See
-`patches/README.md` for the exact commit.
+[`patches/README.md`](./patches/README.md) for the exact commit.

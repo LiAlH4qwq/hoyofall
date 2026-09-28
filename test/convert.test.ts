@@ -151,6 +151,25 @@ describe("convertSubscription", () => {
     )
     expect(exit._tag).toBe("Failure")
   })
+
+  it("does not warn about or fail on explicitly excluded proxies", () => {
+    const decoded = Effect.runSync(decodeSubscription("airport", fixture, "auto"))
+    const strict = {
+      ...subscription,
+      onUnsupported: "fail" as const,
+      convert: { exclude: ["^snell1$"] },
+    }
+    const result = Effect.runSync(
+      convertSubscription(strict, decoded, {
+        emitBuiltinOutbounds: false,
+        proxyNameFormat: "{sub}-{name}",
+      }),
+    )
+    expect(result.warnings).toEqual([])
+    expect(result.fragment.outbounds.map((outbound) => outbound.tag)).not.toContain(
+      "sub-snell1",
+    )
+  })
 })
 
 describe("proxy type mapping", () => {

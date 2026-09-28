@@ -104,19 +104,21 @@ hoyofall --help
 
 ## Run on Android (Magisk / KernelSU / SuKiSU / ReSuKiSU)
 
-hoyofall ships as a flashable module that runs the same `dist/index.js` on a
-cross-compiled Android Node, with all module logic in Nushell:
+hoyofall ships as an all-in-one flashable module: the same `dist/index.js` on a
+prebuilt Android Node, supervised by Nushell, **plus a supervised sing-box** and
+a KernelSU **WebUI** (dashboard, start/stop, config editor, logs):
 
 ```bash
-nu android/build.nu --arch arm64      # cross-compile node + nushell, stage module
+nu android/build.nu --arch arm64      # node + nushell + sing-box, stage module
 nu android/package.nu --arch arm64    # -> hoyofall-android-arm64.zip
+# or, using prebuilt binaries via Nix:
+nix build .#hoyofall-android
 ```
 
-Flash the zip with Magisk/KernelSU, copy `config.example.yaml` to
-`/data/adb/hoyofall/config.yaml`, put subscription tokens in
-`/data/adb/hoyofall/hoyofall.env`, and the module writes the fragment into your
-sing-box module's config directory. Full guide:
-[docs/android.md](./docs/android.md).
+Flash the zip with Magisk/KernelSU; the default config starts without a token.
+Configure subscriptions and sing-box from the WebUI or under `/data/adb/hoyofall/`.
+Full guide: [docs/android.md](./docs/android.md); the planned split into separate
+modules is in [docs/android-future.md](./docs/android-future.md).
 
 ## Documentation
 
@@ -146,4 +148,8 @@ subscription with `onUnsupported: fail`.
 
 ## License
 
-[MIT](./LICENSE)
+hoyofall's own code is [MIT](./LICENSE). The Android module additionally
+redistributes third-party binaries under their own terms — most notably
+[GPL-3.0-or-later](./licenses/GPL-3.0-or-later.txt) sing-box — so the flashable
+module is an aggregate, not an MIT relicensing. See
+[THIRD_PARTY_LICENSES.md](./THIRD_PARTY_LICENSES.md).

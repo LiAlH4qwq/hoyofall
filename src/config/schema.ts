@@ -39,19 +39,19 @@ export const CustomGroup = Schema.Struct({
     default: () => false,
   }),
   includeSubRegexes: Schema.optionalWith(Schema.Array(Schema.String), {
-    default: () => [] as ReadonlyArray<string>,
+    default: () => [],
   }),
   excludeSubRegexes: Schema.optionalWith(Schema.Array(Schema.String), {
-    default: () => [] as ReadonlyArray<string>,
+    default: () => [],
   }),
   includeRegexes: Schema.optionalWith(Schema.Array(Schema.String), {
-    default: () => [] as ReadonlyArray<string>,
+    default: () => [],
   }),
   excludeRegexes: Schema.optionalWith(Schema.Array(Schema.String), {
-    default: () => [] as ReadonlyArray<string>,
+    default: () => [],
   }),
   members: Schema.optionalWith(Schema.Array(MemberRef), {
-    default: () => [] as ReadonlyArray<MemberRef>,
+    default: () => [],
   }),
   includeDirect: Schema.optionalWith(Schema.Boolean, { default: () => false }),
   includeBlock: Schema.optionalWith(Schema.Boolean, { default: () => false }),
@@ -88,10 +88,10 @@ export type CustomGroups = typeof CustomGroups.Type
 export const NativeGroupOptions = Schema.Struct({
   enable: Schema.optionalWith(Schema.Boolean, { default: () => false }),
   includeRegexes: Schema.optionalWith(Schema.Array(Schema.String), {
-    default: () => [] as ReadonlyArray<string>,
+    default: () => [],
   }),
   excludeRegexes: Schema.optionalWith(Schema.Array(Schema.String), {
-    default: () => [] as ReadonlyArray<string>,
+    default: () => [],
   }),
   fallback: Schema.optionalWith(Schema.Literal("urltest", "skip"), {
     default: () => "urltest" as const,
@@ -116,7 +116,7 @@ export const SubscriptionGroups = Schema.Struct({
     default: () => defaultNativeGroupOptions,
   }),
   custom: Schema.optionalWith(CustomGroups, {
-    default: () => ({}) as CustomGroups,
+    default: () => ({}),
   }),
 })
 export type SubscriptionGroups = typeof SubscriptionGroups.Type
@@ -128,7 +128,7 @@ export const defaultSubscriptionGroups: SubscriptionGroups = {
 
 export const SubscriptionConvert = Schema.Struct({
   exclude: Schema.optionalWith(Schema.Array(Schema.String), {
-    default: () => [] as ReadonlyArray<string>,
+    default: () => [],
   }),
 })
 export type SubscriptionConvert = typeof SubscriptionConvert.Type
@@ -148,16 +148,27 @@ const SubscriptionCommon = Schema.Struct({
     default: () => "skip" as const,
   }),
   convert: Schema.optionalWith(SubscriptionConvert, {
-    default: () => ({ exclude: [] as ReadonlyArray<string> }),
+    default: () => ({ exclude: [] }),
   }),
   groups: Schema.optionalWith(SubscriptionGroups, {
     default: () => defaultSubscriptionGroups,
   }),
 })
 
-export const Subscription = Schema.Union(
-  Schema.extend(SubscriptionCommon, Schema.Struct({ url: Schema.NonEmptyString })),
-  Schema.extend(SubscriptionCommon, Schema.Struct({ urlEnv: Schema.NonEmptyString })),
+export const Subscription = Schema.extend(
+  SubscriptionCommon,
+  Schema.Struct({
+    url: Schema.optional(Schema.NonEmptyString),
+    urlEnv: Schema.optional(Schema.NonEmptyString),
+  }),
+).pipe(
+  Schema.filter(
+    (subscription) =>
+      (subscription.url !== undefined) !== (subscription.urlEnv !== undefined),
+    {
+      message: () => "exactly one of url or urlEnv is required",
+    },
+  ),
 )
 export type Subscription = typeof Subscription.Type
 
@@ -187,7 +198,7 @@ export type ConvertOptions = typeof ConvertOptions.Type
 
 export const InstanceGroups = Schema.Struct({
   custom: Schema.optionalWith(CustomGroups, {
-    default: () => ({}) as CustomGroups,
+    default: () => ({}),
   }),
 })
 export type InstanceGroups = typeof InstanceGroups.Type

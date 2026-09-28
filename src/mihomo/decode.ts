@@ -1,5 +1,5 @@
 import { Effect, Either, ParseResult, Schema } from "effect"
-import { parse as parseYaml } from "yaml"
+import { parseYamlUnknown } from "../yaml"
 import {
   GroupDecodeError,
   PayloadDecodeError,
@@ -61,7 +61,7 @@ const parseYamlDocument = (
   value: string,
 ): Effect.Effect<unknown, PayloadDecodeError> =>
   Effect.try({
-    try: () => parseYaml(value) as unknown,
+    try: () => parseYamlUnknown(value),
     catch: (cause) =>
       new PayloadDecodeError({
         subscription: subscriptionId,

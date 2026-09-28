@@ -31,12 +31,16 @@ nu android/package.nu --arch arm64    # hoyofall-android-arm64.zip
 - `src/pipeline/` – refresh streams, snapshot cache (`Stream.scan` + `PubSub`)
 - `src/output/` – atomic file output
 - `src/server/` – optional HTTP endpoints
+- `src/singbox/` – sing-box `outbounds` `Schema` and types
 - `src/diagnostics.ts` – CLI usage and friendly error formatting
 - `scripts/check-ast.ts` – AST enforcement of the functional rules
 - `scripts/check-shell.ts` – bans authored bash / POSIX shell scripts
 - `android/node/` – cross-compiles Node for Android; `android/nushell/` –
-  cross-compiles Nushell; `android/module/` – Magisk/KernelSU payload
-- `nix/` – `package.nix`, `overlay.nix`, NixOS `module.nix`; `flake.nix`
+  cross-compiles Nushell; `android/singbox/` – fetches prebuilt sing-box;
+  `android/webui/` – KernelSU WebUI source; `android/module/` – Magisk/KernelSU
+  payload
+- `nix/` – `package.nix`, `overlay.nix`, `android.nix`, NixOS `module.nix`;
+  `flake.nix`
 
 ## Enforced AST rules
 

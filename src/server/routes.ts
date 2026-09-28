@@ -1,34 +1,17 @@
 import { HttpRouter, HttpServerResponse } from "@effect/platform"
-import { Effect, Exit, PubSub, Queue } from "effect"
+import { Effect, Exit } from "effect"
+import type { PubSub } from "effect"
 import type { ResolvedConfig } from "../config/load"
 import { assembleFragment, withBuiltinOutbounds } from "../convert/fragment"
 import { warningMessage } from "../convert/fragment"
+import { collectReady, takeSnapshot } from "../pipeline/cache"
 import type { CacheMap } from "../pipeline/types"
-
-const loadSnapshot = (
-  pubsub: PubSub.PubSub<CacheMap>,
-): Effect.Effect<CacheMap> =>
-  Effect.scoped(
-    PubSub.subscribe(pubsub).pipe(
-      Effect.flatMap((queue) => Queue.take(queue)),
-    ),
-  )
 
 export const makeRouter = (
   config: ResolvedConfig,
   pubsub: PubSub.PubSub<CacheMap>,
 ) => {
-  const snapshot = loadSnapshot(pubsub)
-
-  const collectConversions = (
-    cache: CacheMap,
-  ) =>
-    config.subscriptions.flatMap((subscription) => {
-      const state = cache[subscription.id]
-      return state !== undefined && state._tag === "Ready"
-        ? [state.conversion]
-        : []
-    })
+  const snapshot = takeSnapshot(pubsub)
 
   const subscriptionHandler = (raw: boolean) =>
     Effect.gen(function* () {
@@ -61,7 +44,7 @@ export const makeRouter = (
   const outboundsHandler = Effect.gen(function* () {
     const cache = yield* snapshot
     const exit = yield* Effect.exit(
-      assembleFragment(config, collectConversions(cache)),
+      assembleFragment(config, collectReady(config, cache)),
     )
     if (Exit.isFailure(exit)) {
       return HttpServerResponse.unsafeJson(

@@ -1,45 +1,21 @@
 #!/usr/bin/env nu
-# Cross-compile the Android payload: Node, Nushell, and the module tree.
+# Cross-compile the Android payload: Node, Nushell, sing-box, and the module tree.
 #
 # This orchestration is Nushell because bash is banned in this repository.
 #
 # Two ways to use it:
-#   * script build (pinned versions, downloads sources, applies Termux patches):
+#   * script build (pinned versions, downloads sources/prebuilts):
 #       nu android/build.nu --arch arm64 --ndk "$ANDROID_NDK_ROOT"
 #   * stage-only (reuse prebuilt binaries, e.g. the Termux payload the Nix
 #     flake downloads):
 #       nu android/build.nu --stage-only --arch arm64 \
-#          --node-bin /nix/store/.../bin/node --nu-bin /nix/store/.../bin/nu \
+#          --node-bin … --nu-bin … --singbox-bin … \
 #          --bundle dist/index.js --schema dist/schema.json --out ./module
-#
-# The Nix flake uses the stage-only path so the module is assembled with the
-# same logic whether the binaries came from Nix or from the subprojects.
-
-def arch-map [arch: string] {
-  match $arch {
-    "arm64" => { dest_cpu: "arm64", clang_prefix: "aarch64-linux-android", gyp_arch: "arm64" }
-    "aarch64" => { dest_cpu: "arm64", clang_prefix: "aarch64-linux-android", gyp_arch: "arm64" }
-    "x86_64" => { dest_cpu: "x64", clang_prefix: "x86_64-linux-android", gyp_arch: "x64" }
-    _ => { error make { msg: $"unsupported --arch ($arch): use arm64 or x86_64" } }
-  }
-}
-
-def host-tag [] {
-  match ($nu.os-info.name) {
-    "linux" => "linux-x86_64"
-    "macos" => "darwin-x86_64"
-    _ => { error make { msg: $"unsupported build host ($nu.os-info.name)" } }
-  }
-}
 
 def check [code: int, what: string] {
   if $code != 0 {
     error make { msg: $"($what) failed (exit ($code))" }
   }
-}
-
-def sha256-of [path: path] {
-  open $path --raw | hash sha256
 }
 
 def resolve-root [root: string] {
@@ -64,6 +40,7 @@ def stage [
   staging: path
   nodeBin: path
   nuBin: path
+  singboxBin: string
   bundle: path
   schema: path
   libDir: string
@@ -84,8 +61,18 @@ def stage [
 
   cp $nodeBin ($staging | path join "bin" "node")
   cp $nuBin ($staging | path join "bin" "nu")
+  if $singboxBin != "" {
+    if not ($singboxBin | path exists) {
+      error make { msg: $"cannot stage sing-box: ($singboxBin) does not exist" }
+    }
+    cp $singboxBin ($staging | path join "bin" "sing-box")
+  }
   cp $bundle ($staging | path join "index.js")
   cp $schema ($staging | path join "schema.json")
+  # Redistribution notices: hoyofall is MIT, but the module bundles the
+  # GPL-3.0-or-later sing-box binary and other third-party libraries.
+  cp ($root | path join "THIRD_PARTY_LICENSES.md") ($staging | path join "THIRD_PARTY_LICENSES.md")
+  cp -r ($root | path join "licenses") ($staging | path join "licenses")
   stage-libcxx $nodeBin ($staging | path join "lib")
   stage-libcxx $nuBin ($staging | path join "lib")
 
@@ -113,26 +100,28 @@ def stage [
     | str join "\n")
   $updatedProps | save -f $propsPath
 
-  ^chmod 0755 ($staging | path join "bin" "node") ($staging | path join "bin" "nu")
-  ^chmod 0755 ($staging | path join "service.sh") ($staging | path join "post-fs-data.sh") ($staging | path join "action.sh") ($staging | path join "uninstall.sh")
+  glob ($staging | path join "bin" "*") | each {|binary| ^chmod 0755 $binary }
+  glob ($staging | path join "*.sh") | each {|shim| ^chmod 0755 $shim }
 }
 
 def main [
-  --root: string = ""         # repository root (defaults to this script's repo)
-  --arch: string = "arm64"    # arm64 | x86_64
-  --ndk: string = ""          # path to the Android NDK (or ANDROID_NDK_ROOT)
-  --features: string = ""     # extra Cargo features for Nushell
-  --stage-only                # skip builds; stage from already-built binaries
-  --node-bin: string = ""     # source `node` binary (stage-only)
-  --nu-bin: string = ""       # source `nu` binary (stage-only)
-  --bundle: string = ""       # source index.js (stage-only)
-  --schema: string = ""       # source schema.json (stage-only)
-  --lib-dir: string = ""      # directory of *.so* to bundle (stage-only)
-  --cert: string = ""         # CA bundle to bundle as etc/ssl/cert.pem (stage-only)
-  --out: string = ""          # staging directory
-  --skip-node                 # reuse android/dist/node-<arch>
-  --skip-nushell              # reuse android/dist/nu-<arch>
-  --force                     # pass --force to the sub-builds
+  --root: string = ""          # repository root (defaults to this script's repo)
+  --arch: string = "arm64"     # arm64 | x86_64
+  --ndk: string = ""           # path to the Android NDK (or ANDROID_NDK_ROOT)
+  --features: string = ""      # extra Cargo features for Nushell
+  --stage-only                 # skip builds; stage from already-built binaries
+  --node-bin: string = ""      # source `node` binary (stage-only)
+  --nu-bin: string = ""        # source `nu` binary (stage-only)
+  --singbox-bin: string = ""   # source `sing-box` binary (stage-only)
+  --bundle: string = ""        # source index.js (stage-only)
+  --schema: string = ""        # source schema.json (stage-only)
+  --lib-dir: string = ""       # directory of *.so* to bundle (stage-only)
+  --cert: string = ""          # CA bundle to bundle as etc/ssl/cert.pem (stage-only)
+  --out: string = ""           # staging directory
+  --skip-node                  # reuse android/dist/node-<arch>
+  --skip-nushell               # reuse android/dist/nu-<arch>
+  --skip-singbox               # reuse android/dist/sing-box-<arch>
+  --force                      # pass --force to the sub-builds
 ] {
   let root = (resolve-root $root)
   let arch = (match $arch {
@@ -144,13 +133,14 @@ def main [
   let staging = (if $out != "" { $out } else { $root | path join "android" "dist" $"module-($arch)" })
   let nodeDir = ($root | path join "android" "dist" $"node-($arch)")
   let nuDir = ($root | path join "android" "dist" $"nu-($arch)")
+  let singboxDir = ($root | path join "android" "dist" $"sing-box-($arch)")
 
   if $stage_only {
     let nodeBin = (if $node_bin != "" { $node_bin } else { $nodeDir | path join "node" })
     let nuBin = (if $nu_bin != "" { $nu_bin } else { $nuDir | path join "nu" })
     let bundle = (if $bundle != "" { $bundle } else { $root | path join "dist" "index.js" })
     let schema = (if $schema != "" { $schema } else { $root | path join "dist" "schema.json" })
-    stage $root $staging $nodeBin $nuBin $bundle $schema $lib_dir $cert
+    stage $root $staging $nodeBin $nuBin $singbox_bin $bundle $schema $lib_dir $cert
     print $"module tree staged at ($staging)"
     return
   }
@@ -167,16 +157,21 @@ def main [
     ^nu ($root | path join "android" "nushell" "build.nu") --root $root --arch $arch ...$ndkFlags ...$featureFlags ...$forceFlags
     check $env.LAST_EXIT_CODE "android/nushell/build.nu"
   }
+  if not $skip_singbox {
+    ^nu ($root | path join "android" "singbox" "fetch.nu") --root $root --arch $arch ...$forceFlags
+    check $env.LAST_EXIT_CODE "android/singbox/fetch.nu"
+  }
 
-  # The web bundle is produced by `pnpm build`; build it if absent.
+  # The web bundle and WebUI are produced by `pnpm build`; build them if absent.
   let bundle = ($root | path join "dist" "index.js")
-  if not ($bundle | path exists) {
-    print -e "dist/index.js missing; running pnpm build"
+  let webui = ($root | path join "android" "module" "webroot" "app.js")
+  if (not ($bundle | path exists)) or (not ($webui | path exists)) {
+    print -e "build output missing; running pnpm build"
     ^pnpm build
     check $env.LAST_EXIT_CODE "pnpm build"
   }
 
-  stage $root $staging ($nodeDir | path join "node") ($nuDir | path join "nu") $bundle ($root | path join "dist" "schema.json") "" ""
+  stage $root $staging ($nodeDir | path join "node") ($nuDir | path join "nu") ($singboxDir | path join "sing-box") $bundle ($root | path join "dist" "schema.json") "" ""
   print $"module tree staged at ($staging)"
   print $"  next: nu android/package.nu --arch ($arch)"
 }

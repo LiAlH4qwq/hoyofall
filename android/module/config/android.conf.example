@@ -22,6 +22,11 @@ singbox_target = "hoyofall.json"
 #   singbox_reload = ["/data/adb/modules/sing-box/action.sh"]
 singbox_reload = []
 
+# Restart the bundled sing-box when hoyofall writes a new fragment (sing-box
+# reads its config once, so a restart is how it picks up new outbounds). Set to
+# false to leave sing-box running across refreshes.
+restart_singbox_on_change = true
+
 # Seconds between fragment polls, and between daemon restarts.
 watch_interval_seconds = 5
 restart_delay_seconds = 5

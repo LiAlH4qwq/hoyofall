@@ -27,11 +27,18 @@ convert:
   emitBuiltinOutbounds: false
   proxyNameFormat: "{sub}-{name}"
 
+# A subscription is required by the schema. This default points at a closed
+# local port so the daemon starts, logs one failed refresh, writes an empty
+# fragment, and keeps running; using `urlEnv` without the variable set would fail
+# at startup and make the supervisor restart-loop instead.
+#
+# Replace `url` with your subscription, or switch to `urlEnv: HOYOFALL_SUB_URL`
+# and put the token in hoyofall.env.
 subscriptions:
   default:
     name: default
-    urlEnv: HOYOFALL_SUB_URL
-    intervalSeconds: 3600
+    url: "http://127.0.0.1:9/disabled"
+    intervalSeconds: 86400
     format: auto
     onUnsupported: skip
 

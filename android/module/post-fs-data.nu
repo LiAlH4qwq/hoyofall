@@ -6,8 +6,7 @@
 # and side-effect-light: it runs synchronously during boot. All logic is
 # Nushell; the .sh shim is an unavoidable module-API entrypoint.
 
-const MODULE = "/data/adb/modules/hoyofall"
-const DATA = "/data/adb/hoyofall"
+use ./services.nu *
 
 def seed [from: path, to: path, label: string] {
   if not ($to | path exists) {
@@ -17,11 +16,12 @@ def seed [from: path, to: path, label: string] {
 }
 
 def main [] {
-  [ "out" "log" "run" ] | each {|dir| mkdir ($DATA | path join $dir) }
+  [ "out" "log" "singbox" ] | each {|dir| mkdir ($DATA | path join $dir) }
 
   seed ($MODULE | path join "config" "config.android.yaml") ($DATA | path join "config.yaml") "config"
   seed ($MODULE | path join "config" "hoyofall.env.example") ($DATA | path join "hoyofall.env") "token env"
   seed ($MODULE | path join "config" "android.conf.example") ($DATA | path join "android.conf") "module settings"
+  seed ($MODULE | path join "config" "singbox.json") ($DATA | path join "singbox" "config.json") "sing-box config"
 
   ^chmod 700 $DATA
   print -e $"[hoyofall] post-fs-data: prepared ($DATA)"

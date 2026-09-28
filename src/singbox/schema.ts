@@ -21,13 +21,6 @@ export const SingboxTls = Schema.Struct({
 })
 export type SingboxTls = typeof SingboxTls.Type
 
-export const SingboxMultiplex = Schema.Struct({
-  enabled: Schema.Boolean,
-  protocol: Schema.optional(Schema.String),
-  max_streams: Schema.optional(Schema.Number),
-})
-export type SingboxMultiplex = typeof SingboxMultiplex.Type
-
 export const SingboxTransport = Schema.Union(
   Schema.Struct({
     type: Schema.Literal("ws"),
@@ -93,7 +86,6 @@ const Vmess = Schema.Struct({
   alter_id: Schema.optional(Schema.Number),
   tls: Schema.optional(SingboxTls),
   transport: Schema.optional(SingboxTransport),
-  multiplex: Schema.optional(SingboxMultiplex),
 })
 
 const Vless = Schema.Struct({
@@ -103,10 +95,8 @@ const Vless = Schema.Struct({
   server_port: Schema.Number,
   uuid: Schema.String,
   flow: Schema.optional(Schema.String),
-  packet_encoding: Schema.optional(Schema.String),
   tls: Schema.optional(SingboxTls),
   transport: Schema.optional(SingboxTransport),
-  multiplex: Schema.optional(SingboxMultiplex),
 })
 
 const Trojan = Schema.Struct({
@@ -117,7 +107,6 @@ const Trojan = Schema.Struct({
   password: Schema.String,
   tls: Schema.optional(SingboxTls),
   transport: Schema.optional(SingboxTransport),
-  multiplex: Schema.optional(SingboxMultiplex),
 })
 
 const Hysteria = Schema.Struct({

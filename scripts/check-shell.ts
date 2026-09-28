@@ -21,16 +21,18 @@ const skippedDirectories = new Set([
 // Magisk/KernelSU module bootstrap entrypoints, whose entire body is an `exec`
 // of Nushell. Keep this list in sync with `android/module/`.
 const allowedShellFiles = new Set([
+  "android/module/customize.sh",
   "android/module/post-fs-data.sh",
   "android/module/service.sh",
-  "android/module/action.sh",
   "android/module/uninstall.sh",
 ])
 
 const shellExtensions = [".sh", ".bash", ".bats"]
 
-// `#!/usr/bin/env bash`, `#!/bin/bash`, `#!/bin/sh`, `#!/bin/dash`, …
-const bashShebang = /^#!\s*(?:\/usr\/bin\/env\s+)?(?:bash|sh|dash|zsh|ksh)\b/
+// `#!/usr/bin/env bash`, `#!/bin/bash`, `#!/bin/sh`, `#!/bin/dash`,
+// `#!/usr/bin/bash`, … The optional path group covers absolute interpreters.
+const bashShebang =
+  /^#!\s*(?:\/usr\/bin\/env\s+)?(?:\/(?:usr\/)?bin\/)?(?:bash|sh|dash|zsh|ksh)\b/
 
 const collectFiles = (directory: string): ReadonlyArray<string> =>
   readdirSync(directory).flatMap((entry) => {

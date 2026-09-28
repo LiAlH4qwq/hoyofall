@@ -1,4 +1,4 @@
-import type {
+import {
   ConfigParseError,
   ConfigReadError,
   ConfigValidationError,
@@ -27,39 +27,26 @@ const bullet = (items: ReadonlyArray<string>): string =>
 const causeMessage = (cause: unknown): string =>
   cause instanceof Error ? cause.message : String(cause)
 
-const tagOf = (error: unknown): string | undefined =>
-  typeof error === "object" && error !== null && "_tag" in error
-    ? String((error as { readonly _tag: unknown })._tag)
-    : undefined
-
+// `instanceof` keeps the dispatch type-safe: the `Data.TaggedError` classes are
+// real classes, and an unrecognised value falls through to the generic case.
 export const formatDiagnostic = (error: unknown): string => {
-  switch (tagOf(error)) {
-    case "UsageError": {
-      const usageError = error as UsageError
-      return `${usageError.message}\n\n${usage}`
-    }
-    case "ConfigReadError": {
-      const readError = error as ConfigReadError
-      return `Cannot read the configuration file.\n  path: ${readError.path}\n  cause: ${causeMessage(readError.cause)}`
-    }
-    case "ConfigParseError": {
-      const parseError = error as ConfigParseError
-      return [
-        `The configuration file is not valid.`,
-        `  path: ${parseError.path}`,
-        bullet(parseError.issues),
-      ].join("\n")
-    }
-    case "ConfigValidationError": {
-      const validationError = error as ConfigValidationError
-      return [
-        "The configuration is invalid.",
-        bullet(validationError.issues),
-      ].join("\n")
-    }
-    default:
-      return error instanceof Error
-        ? `Unexpected error: ${error.message}`
-        : `Unexpected error: ${String(error)}`
+  if (error instanceof UsageError) {
+    return `${error.message}\n\n${usage}`
   }
+  if (error instanceof ConfigReadError) {
+    return `Cannot read the configuration file.\n  path: ${error.path}\n  cause: ${causeMessage(error.cause)}`
+  }
+  if (error instanceof ConfigParseError) {
+    return [
+      `The configuration file is not valid.`,
+      `  path: ${error.path}`,
+      bullet(error.issues),
+    ].join("\n")
+  }
+  if (error instanceof ConfigValidationError) {
+    return ["The configuration is invalid.", bullet(error.issues)].join("\n")
+  }
+  return error instanceof Error
+    ? `Unexpected error: ${error.message}`
+    : `Unexpected error: ${String(error)}`
 }

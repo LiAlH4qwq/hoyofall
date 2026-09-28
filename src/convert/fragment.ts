@@ -4,6 +4,7 @@ import type { ConvertOptions, CustomGroup, MemberRef } from "../config/schema"
 import {
   DuplicateTagError,
   EmptyCustomGroupError,
+  EmptyCustomGroupsError,
   MissingReferenceError,
   StrictConversionError,
   type ConversionWarning,
@@ -61,6 +62,11 @@ const matchesAny = (
 
 const dedupe = (values: ReadonlyArray<string>): ReadonlyArray<string> =>
   values.filter((value, index) => values.indexOf(value) === index)
+
+const builtinOutbounds = (): ReadonlyArray<Outbound> => [
+  { type: "direct", tag: "direct" },
+  { type: "block", tag: "block" },
+]
 
 const filterBySubscription = (
   candidates: ReadonlyArray<Candidate>,
@@ -208,12 +214,24 @@ const buildCustomGroup = (args: BuildCustomGroupArgs): BuiltCustomGroup => {
     group.excludeRegexes,
   )
 
+  // Typed `proxy` / `nativeGroup` members are subscription-derived, so they are
+  // scoped by `includeSubRegexes` / `excludeSubRegexes` like the pools above.
+  const memberProxyCandidates = filterBySubscription(
+    args.proxyCandidates,
+    group.includeSubRegexes,
+    group.excludeSubRegexes,
+  )
+  const memberNativeCandidates = filterBySubscription(
+    args.nativeCandidates,
+    group.includeSubRegexes,
+    group.excludeSubRegexes,
+  )
   const memberResolutions = group.members.map((member) => ({
     member,
     tags: resolveMemberTags(
       member,
-      args.proxyCandidates,
-      args.nativeCandidates,
+      memberProxyCandidates,
+      memberNativeCandidates,
       selflessCustomCandidates,
     ),
   }))
@@ -240,17 +258,30 @@ const buildCustomGroup = (args: BuildCustomGroupArgs): BuiltCustomGroup => {
         : [],
     )
 
-  const selectedCandidates = [
+  // A selector `default` may name a resolved member (proxy/native/custom
+  // group), another custom group, or the builtin `direct`/`block`.
+  const defaultCandidates: ReadonlyArray<Candidate> = [
     ...proxySelected,
     ...nativeSelected,
     ...customSelected,
+    ...memberResolutions.flatMap((resolution) =>
+      resolution.tags.map((tag) => ({
+        subscription: InstanceSubscription,
+        name: resolution.member.name,
+        tag,
+      })),
+    ),
   ]
   const defaultTag =
     group.default === null
       ? undefined
-      : selectedCandidates.find(
-          (candidate) => candidate.name === group.default,
-        )?.tag
+      : group.default === "direct" || group.default === "block"
+        ? group.default
+        : defaultCandidates.find(
+            (candidate) =>
+              candidate.name === group.default ||
+              candidate.tag === group.default,
+          )?.tag
   const defaultWarnings: ReadonlyArray<ConversionWarning> =
     group.default !== null && defaultTag === undefined
       ? [
@@ -394,16 +425,15 @@ export const convertSubscription = (
 ): Effect.Effect<SubscriptionFragment, StrictConversionError> => {
   const native = subscription.groups.native
 
-  const decodeWarnings: ReadonlyArray<ConversionWarning> = [
-    ...decoded.proxies.flatMap((result) =>
-      result._tag === "warning" ? [result.warning] : [],
-    ),
-    ...(native.enable
-      ? decoded.groups.flatMap((result) =>
-          result._tag === "warning" ? [result.warning] : [],
-        )
-      : []),
-  ]
+  const isExcluded = (name: string): boolean =>
+    matchesAny(subscription.convert.exclude, name)
+
+  const groupAllowed = (name: string): boolean =>
+    native.enable &&
+    !isExcluded(name) &&
+    (native.includeRegexes.length === 0 ||
+      matchesAny(native.includeRegexes, name)) &&
+    !matchesAny(native.excludeRegexes, name)
 
   const proxied = decoded.proxies.flatMap((result) =>
     result._tag === "proxy" ? [result.proxy] : [],
@@ -412,19 +442,24 @@ export const convertSubscription = (
     result._tag === "group" ? [result.group] : [],
   )
 
-  const isExcluded = (name: string): boolean =>
-    matchesAny(subscription.convert.exclude, name)
-
   const keptProxies = proxied.filter((proxy) => !isExcluded(proxy.name))
-  const keptGroups = native.enable
-    ? grouped.filter(
-        (group) =>
-          !isExcluded(group.name) &&
-          (native.includeRegexes.length === 0 ||
-            matchesAny(native.includeRegexes, group.name)) &&
-          !matchesAny(native.excludeRegexes, group.name),
-      )
-    : []
+  const keptGroups = grouped.filter((group) => groupAllowed(group.name))
+
+  // Only warn about entities that survive the exclusion/scope filters: an
+  // explicitly excluded proxy must not fail a strict (`onUnsupported: fail`)
+  // subscription.
+  const decodeWarnings: ReadonlyArray<ConversionWarning> = [
+    ...decoded.proxies.flatMap((result) =>
+      result._tag === "warning" && !isExcluded(result.warning.proxy)
+        ? [result.warning]
+        : [],
+    ),
+    ...decoded.groups.flatMap((result) =>
+      result._tag === "warning" && groupAllowed(result.warning.group)
+        ? [result.warning]
+        : [],
+    ),
+  ]
 
   const format = options.proxyNameFormat
 
@@ -547,7 +582,7 @@ export const convertSubscription = (
 export const assembleFragment = (
   config: ResolvedConfig,
   fragments: ReadonlyArray<SubscriptionFragment>,
-): Effect.Effect<AssembledFragment, DuplicateTagError | EmptyCustomGroupError> => {
+): Effect.Effect<AssembledFragment, DuplicateTagError | EmptyCustomGroupsError> => {
   const proxyCandidates: ReadonlyArray<Candidate> = fragments.flatMap(
     (fragment) =>
       fragment.proxies.map((entry) => ({
@@ -611,12 +646,7 @@ export const assembleFragment = (
       item.kind === "custom" ? [item.outbound] : [],
     ),
     ...built.outbounds,
-    ...(config.convert.emitBuiltinOutbounds
-      ? [
-          { type: "direct" as const, tag: "direct" },
-          { type: "block" as const, tag: "block" },
-        ]
-      : []),
+    ...(config.convert.emitBuiltinOutbounds ? builtinOutbounds() : []),
     ...classified.flatMap((item) =>
       item.kind === "native" ? [item.outbound] : [],
     ),
@@ -630,9 +660,8 @@ export const assembleFragment = (
     tags.filter((tag, index) => tags.indexOf(tag) !== index),
   )
 
-  const firstError = built.errors[0]
-  if (firstError !== undefined) {
-    return Effect.fail(firstError)
+  if (built.errors.length > 0) {
+    return Effect.fail(new EmptyCustomGroupsError({ groups: built.errors }))
   }
   if (duplicates.length > 0) {
     return Effect.fail(new DuplicateTagError({ tags: duplicates }))
@@ -646,11 +675,5 @@ export const withBuiltinOutbounds = (
   emit: boolean,
 ): Fragment =>
   emit
-    ? {
-        outbounds: [
-          { type: "direct", tag: "direct" },
-          { type: "block", tag: "block" },
-          ...fragment.outbounds,
-        ],
-      }
+    ? { outbounds: [...builtinOutbounds(), ...fragment.outbounds] }
     : fragment

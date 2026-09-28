@@ -2,42 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>hoyofall</title>
-    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
-    <main>
-      <h1>hoyofall</h1>
-      <p class="muted">
-        mihomo subscriptions &rarr; sing-box <code>outbounds</code>, headless.
-      </p>
-
-      <section>
-        <h2>Status</h2>
-        <dl id="status">
-          <dt>service</dt>
-          <dd id="service">checking&hellip;</dd>
-          <dt>subscriptions</dt>
-          <dd id="subscriptions">&mdash;</dd>
-          <dt>output</dt>
-          <dd id="output">&mdash;</dd>
-        </dl>
-        <p class="muted">
-          Enable <code>output.http.enabled</code> in
-          <code>/data/adb/hoyofall/config.yaml</code> to populate this page.
-        </p>
-      </section>
-
-      <section>
-        <h2>Configuration</h2>
-        <ul>
-          <li><code>/data/adb/hoyofall/config.yaml</code></li>
-          <li><code>/data/adb/hoyofall/hoyofall.env</code> (tokens)</li>
-          <li><code>/data/adb/hoyofall/android.conf</code> (sing-box hook)</li>
-        </ul>
-      </section>
-    </main>
-    <script src="script.js"></script>
+    <div id="root"></div>
+    <script src="./app.js"></script>
   </body>
 </html>

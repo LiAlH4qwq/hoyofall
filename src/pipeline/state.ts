@@ -1,6 +1,7 @@
 import { HttpClient } from "@effect/platform"
 import type { FileSystem, Path } from "@effect/platform"
 import {
+  Clock,
   Duration,
   Effect,
   PubSub,
@@ -17,7 +18,11 @@ import {
   type SubscriptionFragment,
 } from "../convert/fragment"
 import { FetchError } from "../errors"
-import type { PayloadDecodeError, StrictConversionError } from "../errors"
+import type {
+  EmptyCustomGroupsError,
+  PayloadDecodeError,
+  StrictConversionError,
+} from "../errors"
 import { decodeSubscription } from "../mihomo/decode"
 import { writeSnapshot } from "../output/file"
 import type { CacheMap, SubscriptionState } from "./types"
@@ -105,13 +110,12 @@ const failedSubscription = (
   subscriptionId: string,
   message: string,
 ): Effect.Effect<SubscriptionState> =>
-  Effect.logWarning(`subscription ${subscriptionId}: ${message}`).pipe(
-    Effect.as<SubscriptionState>({
-      _tag: "Failed",
-      error: message,
-      updatedAt: Date.now(),
-    }),
-  )
+  Effect.gen(function* () {
+    yield* Effect.logWarning(`subscription ${subscriptionId}: ${message}`)
+    const updatedAt = yield* Clock.currentTimeMillis
+    const state: SubscriptionState = { _tag: "Failed", error: message, updatedAt }
+    return state
+  })
 
 const refreshOne = (
   subscription: ResolvedSubscription,
@@ -123,13 +127,17 @@ const refreshOne = (
     ),
     Effect.flatMap((decoded) => convertSubscription(subscription, decoded, convert)),
     Effect.tap(logWarnings),
-    Effect.map(
-      (fragment): SubscriptionState => ({
-        _tag: "Ready",
-        conversion: fragment,
-        warnings: fragment.warnings,
-        updatedAt: Date.now(),
-        lastError: undefined,
+    Effect.flatMap((fragment) =>
+      Effect.gen(function* () {
+        const updatedAt = yield* Clock.currentTimeMillis
+        const state: SubscriptionState = {
+          _tag: "Ready",
+          conversion: fragment,
+          warnings: fragment.warnings,
+          updatedAt,
+          lastError: undefined,
+        }
+        return state
       }),
     ),
     Effect.catchTags({
@@ -182,7 +190,7 @@ export const snapshotStream = (
   ).pipe(
     // `Stream.mapAccum` (unlike `Stream.scan`) does not emit the initial state,
     // so we never write an empty fragment before the first refresh completes.
-    Stream.mapAccum({} as CacheMap, (cache, update) => {
+    Stream.mapAccum(emptyCache, (cache, update) => {
       const next = applyUpdate(cache, update)
       return [next, next] as const
     }),
@@ -191,6 +199,8 @@ export const snapshotStream = (
 export interface InstanceRuntime {
   readonly pubsub: PubSub.PubSub<CacheMap>
 }
+
+const emptyCache: CacheMap = {}
 
 export const startInstance = (
   config: ResolvedConfig,
@@ -213,9 +223,11 @@ export const startInstance = (
               Effect.logError(
                 `refusing to write output: duplicate outbound tags ${error.tags.join(", ")}`,
               ),
-            EmptyCustomGroupError: (error) =>
+            EmptyCustomGroupsError: (error: EmptyCustomGroupsError) =>
               Effect.logError(
-                `refusing to write output: ${warningMessage(error)}`,
+                `refusing to write output: ${error.groups
+                  .map(warningMessage)
+                  .join("; ")}`,
               ),
           }),
         ),

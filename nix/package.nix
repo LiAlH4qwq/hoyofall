@@ -20,7 +20,7 @@ let
   # pnpm major changes, since its store format is not stable across majors (we
   # pin pnpm to a major in flake.nix for exactly this reason).
   pnpmDepsHashes = {
-    default = "sha256-B0aFBHNFG5YAjpWIvRMKCZqRnbgDUApPZwI8G0G73RY=";
+    default = "sha256-SYmZG1SAdgXVzbsyHEcuZNohNEjrP5wTgztofjKov5w=";
     # x86_64-linux = "sha256-…";
     # aarch64-linux = "sha256-…";
     # x86_64-darwin = "sha256-…";
@@ -80,6 +80,8 @@ stdenv.mkDerivation (finalAttrs: {
       cp dist/index.js.map $out/lib/hoyofall/index.js.map
     fi
     cp dist/schema.json $out/share/hoyofall/schema.json
+    # KernelSU module WebUI, bundled by `pnpm build` (android/webui -> webroot).
+    cp -r android/module/webroot $out/share/hoyofall/webroot
 
     makeWrapper ${lib.getExe' nodejs "node"} $out/bin/hoyofall \
       --add-flags "$out/lib/hoyofall/index.js"

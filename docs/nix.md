@@ -5,7 +5,7 @@ hoyofall ships a flake with:
 | Output | Contents |
 |---|---|
 | `packages.<system>.hoyofall` (and `default`) | The Node bundle plus `share/hoyofall/schema.json`. |
-| `packages.<system>.hoyofall-android` | Flashable Magisk/KernelSU module for Android arm64 (prebuilt Termux payload). |
+| `packages.<system>.hoyofall-android` | All-in-one Magisk/KernelSU module for Android arm64 (hoyofall + sing-box + WebUI). |
 | `devShells.<system>.android` | Host toolchain + Android NDK for building the pinned subprojects. |
 | `overlays.default` | Adds `pkgs.hoyofall`. |
 | `nixosModules.default` | A single-instance `services.hoyofall` module. |
@@ -95,10 +95,11 @@ enough.
 
 ## Android
 
-`nix/android.nix` assembles the flashable Android module from **prebuilt Termux
-aarch64 binaries** (Node, Nushell and their shared libraries), fetched as
-fixed-output derivations, then reuses the repository's Nushell staging/zip logic
-(`android/build.nu --stage-only`, `android/package.nu`):
+`nix/android.nix` assembles the flashable all-in-one module from **prebuilt
+binaries** — Termux aarch64 Node/Nushell and their shared libraries, plus the
+upstream sing-box Android build — fetched as fixed-output derivations, then
+reuses the repository's Nushell staging/zip logic (`android/build.nu
+--stage-only`, `android/package.nu`):
 
 ```bash
 nix build .#hoyofall-android   # result/{module,hoyofall-android-arm64.zip}

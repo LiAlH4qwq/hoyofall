@@ -98,4 +98,28 @@ subscriptions:
     )
     expect(exit._tag).toBe("Failure")
   })
+
+  it("requires exactly one of url or urlEnv", () => {
+    const both = `
+subscriptions:
+  airport:
+    url: https://example.com/sub
+    urlEnv: AIRPORT_URL
+output:
+  file: { enabled: true }
+`
+    const neither = `
+subscriptions:
+  airport:
+    intervalSeconds: 60
+output:
+  file: { enabled: true }
+`
+    expect(Effect.runSyncExit(decodeConfig(parse(both), "test.yaml"))._tag).toBe(
+      "Failure",
+    )
+    expect(
+      Effect.runSyncExit(decodeConfig(parse(neither), "test.yaml"))._tag,
+    ).toBe("Failure")
+  })
 })

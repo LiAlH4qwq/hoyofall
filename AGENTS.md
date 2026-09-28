@@ -43,8 +43,9 @@ nu android/package.nu --arch arm64    # hoyofall-android-arm64.zip
 - `src/diagnostics.ts` – CLI usage and friendly error formatting
 - `scripts/check-ast.ts` – AST enforcement of the rules below
 - `scripts/check-shell.ts` – bans authored bash / POSIX shell scripts
-- `android/` – Android subprojects: `node/` and `nushell/` cross-compilation,
-  `module/` (Magisk/KernelSU payload), `build.nu`, `package.nu`
+- `android/` – Android subprojects: `node/` + `nushell/` cross-compilation,
+  `singbox/` prebuilt fetch, `webui/` source, `module/` (Magisk/KernelSU
+  payload), `build.nu`, `package.nu`
 - `nix/` – `package.nix`, `overlay.nix`, NixOS `module.nix`; `flake.nix`
 
 ## Hard rules (enforced by `pnpm lint`)
@@ -69,6 +70,11 @@ TypeScript compiler API and fails on any of:
 ESLint mirrors these with `no-restricted-syntax` and
 `eslint-plugin-functional`, so editors surface them before CI.
 
+The KernelSU WebUI (`android/webui/src`) is React/browser code: it follows the
+same style where practical, but the no-mutation / no-promise rules cannot apply
+to the DOM and the KernelSU `ksu.exec` callback bridge, so it is outside the AST
+checker's roots.
+
 Replace the forbidden constructs with `const`, `Array.map` / `filter` /
 `reduce` / `flatMap`, `Effect.all`, `Effect.try` / `Effect.tryPromise`,
 `Match`, and typed errors.
@@ -86,12 +92,15 @@ shell file or `#!/bin/bash` / `#!/bin/sh` shebang outside the allowlist below.
 Two deliberate exceptions:
 
 - **Android module bootstrap shims.** The Magisk/KernelSU module API executes
-  `post-fs-data.sh`, `service.sh`, `action.sh` and `uninstall.sh` with the
+  `customize.sh`, `post-fs-data.sh`, `service.sh` and `uninstall.sh` with the
   system shell, so these files are the *only* permitted shell scripts. Their
   whole body must be a single `exec` of the bundled Nushell (optionally via
   `/system/bin/env` to hardcode `LD_LIBRARY_PATH` to the module's `lib/`) with
   the module path hardcoded; no logic, conditionals, or variable expansion.
-  Everything else lives in the matching `.nu` file.
+  `customize.sh` is the one exception — a single `chmod 0755` restoring the exec
+  bits the module installer strips from `bin/node`, `bin/nu`, `bin/sing-box`
+  and the shims (it uses Magisk's `$MODPATH` for that one command). Everything
+  else lives in the matching `.nu` file.
 - **Nix `stdenv` build phases.** Nix builders run their phases under bash by
   construction. Keep phase logic minimal and delegate to `nu -c '…'` / `.nu`
   scripts wherever practical.
@@ -106,16 +115,32 @@ payload. They are part of this repository but are kept self-contained so they
 can be split out later (the Nushell port in particular starts minimal and grows
 toward a full build):
 
-- `android/node/` – cross-compiles Node for Android (`aarch64-linux-android`,
-  later `x86_64`). `versions.lock` pins the NDK and Node; `patches/` vendors the
-  Termux `nodejs` patch set; `build.nu` drives `android-configure` + `make`.
+- `android/node/` – cross-compiles Node for Android (`aarch64-linux-android`
+  and `x86_64-linux-android`). `versions.lock` pins the NDK and Node; `patches/`
+  vendors the Termux `nodejs` patch set; `build.nu` drives Node's `./configure`
+  + `make` against the NDK.
 - `android/nushell/` – cross-compiles Nushell for Android. `versions.lock` pins
   Nushell; `patches/` vendors the Termux `sysinfo` patch; `build.nu` drives
   Cargo with the NDK linker and the reduced feature set.
-- `android/module/` – the Magisk-format module: exec-only `.sh` shims plus
-  `.nu` logic, default config, and optional KernelSU `webroot/`.
-- `android/build.nu` orchestrates node + nushell + module; `android/package.nu`
-  assembles `hoyofall-android-<arch>.zip`.
+- `android/singbox/` – fetches the pinned prebuilt sing-box for Android
+  (`fetch.nu` + `versions.lock`); `nix/android.nix` uses a fixed-output
+  derivation for the same tarball.
+- `android/module/` – the Magisk-format module: exec-only `.sh` shims (plus the
+  `customize.sh` chmod), `.nu` logic (`services.nu` service specs, `service.nu`
+  supervisor, `control.nu` control protocol, `post-fs-data.nu`,
+  `uninstall.nu`), default configs (hoyofall + sing-box), and the KernelSU
+  `webroot/`.
+- `android/webui/` – the KernelSU WebUI source (React + Effect + CodeMirror,
+  a pnpm workspace package with its own deps), bundled by rolldown into
+  `android/module/webroot/app.js`; it controls services and edits config/log
+  only through `control.nu`.
+- `android/build.nu` orchestrates node + nushell + sing-box + module;
+  `android/package.nu` assembles `hoyofall-android-<arch>.zip`.
+
+The module is intentionally **all-in-one** for now; the planned split into
+separate runtime / supervisor / app / WebUI modules, their stable interfaces and
+the migration plan are in [`docs/android-future.md`](./docs/android-future.md)
+(kept current for humans and agents).
 
 Rules: pin every tool version and patch (no floating downloads); scripts are
 Nushell; the module's logic is Nushell with the shim exception above; the

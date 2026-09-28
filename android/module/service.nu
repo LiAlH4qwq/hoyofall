@@ -1,17 +1,18 @@
 #!/usr/bin/env nu
-# hoyofall Android module: supervise the daemon and inject the fragment.
+# hoyofall Android module: supervise the services and inject the fragment.
 #
 # Runs from service.sh (the shim `exec`s this file) at late_start. Magisk and
 # KernelSU start service scripts asynchronously, so blocking here is correct:
-# the process stays alive and supervises the Node.js daemon.
+# the process stays alive and supervises its services (hoyofall, sing-box).
 #
 # All logic is Nushell; the .sh shim is the only permitted shell file.
 
-const MODULE = "/data/adb/modules/hoyofall"
-const DATA = "/data/adb/hoyofall"
+use ./services.nu *
 
-# Poll the aggregate fragment and, on change, copy it into the sing-box module's
-# config directory and run the configured reload hook.
+# Poll the aggregate fragment and, on change, copy it into an *external*
+# sing-box module's config directory and run the configured reload hook.
+# (The bundled sing-box reads /data/adb/hoyofall/out via `-C`; this is for users
+# who run a separate sing-box module.)
 def watch-loop [
   outFile: path
   targetDir: string
@@ -52,13 +53,55 @@ def read-dotenv [path: path] {
   | each {|pair| { key: $pair.key, value: $pair.value } }
 }
 
+# When hoyofall writes a new fragment, restart a service so it reloads it.
+# Optional (see `restart_singbox_on_change`); the supervisor brings the service
+# back. `previous` is seeded from the current fragment so a restart is not
+# triggered just because the file exists at boot.
+def restart-loop [outFile: path, name: string, interval: int] {
+  mut previous = (if ($outFile | path exists) { open $outFile --raw | hash sha256 } else { "" })
+  loop {
+    if ($outFile | path exists) {
+      let current = (open $outFile --raw | hash sha256)
+      if $current != $previous {
+        print -e $"[hoyofall] fragment changed; restarting ($name)"
+        stop-service $name
+        $previous = $current
+      }
+    }
+    sleep ($interval | into duration --unit sec)
+  }
+}
+
+# Supervise one service: restart it on exit, and honour its "stopped" flag.
+def supervise [name: string, delay: int] {
+  let spec = (service-spec $name)
+  print -e $"[hoyofall] supervising ($name) -> ($spec.log)"
+  if not ($spec.bin | path exists) {
+    print -e $"[hoyofall] skipping ($name): ($spec.bin) missing"
+    return
+  }
+  loop {
+    if ($spec.flag | path exists) {
+      sleep 2sec
+      continue
+    }
+    # Nushell raises on a non-zero external exit; catch it so the supervisor is
+    # not taken down with the service.
+    try {
+      ^$spec.bin ...$spec.args o+e>| save --append $spec.log
+    } catch {|error| print -e $"[hoyofall] ($name) error: ($error.msg)" }
+    let code = ($env.LAST_EXIT_CODE? | default 0)
+    print -e $"[hoyofall] ($name) exited ($code); restarting in ($delay)s"
+    sleep ($delay | into duration --unit sec)
+  }
+}
+
 def main [] {
   let config = ($DATA | path join "config.yaml")
   let envPath = ($DATA | path join "hoyofall.env")
   let confPath = ($DATA | path join "android.conf")
-  let node = ($MODULE | path join "bin" "node")
   let index = ($MODULE | path join "index.js")
-  let log = ($DATA | path join "log" "hoyofall.log")
+  let node = ($MODULE | path join "bin" "node")
 
   if not ($node | path exists) {
     error make { msg: $"($node) is missing; reinstall the module" }
@@ -67,7 +110,7 @@ def main [] {
     error make { msg: $"($index) is missing; reinstall the module" }
   }
 
-  [ "out" "log" "run" ] | each {|dir| mkdir ($DATA | path join $dir) }
+  [ "out" "log" "singbox" ] | each {|dir| mkdir ($DATA | path join $dir) }
   if not ($config | path exists) {
     cp ($MODULE | path join "config" "config.android.yaml") $config
     print -e $"[hoyofall] seeded default config at ($config)"
@@ -85,6 +128,7 @@ def main [] {
   let reload = ($conf | get --optional singbox_reload | default [])
   let interval = ($conf | get --optional watch_interval_seconds | default 5)
   let delay = ($conf | get --optional restart_delay_seconds | default 5)
+  let restartSingbox = ($conf | get --optional restart_singbox_on_change | default true)
 
   # Native dependencies (libc++_shared.so) are staged next to the binaries.
   let libDir = ($MODULE | path join "lib")
@@ -99,6 +143,11 @@ def main [] {
     $env.SSL_CERT_FILE = $cert
     $env.NODE_EXTRA_CA_CERTS = $cert
   }
+  # Also trust the platform store so extra roots installed there are honoured.
+  let certDir = "/system/etc/security/cacerts"
+  if ($certDir | path exists) {
+    $env.SSL_CERT_DIR = $certDir
+  }
 
   if $watch and ($targetDir != "") {
     try {
@@ -107,15 +156,21 @@ def main [] {
     } catch {|error| print -e $"[hoyofall] fragment watcher not started: ($error.msg)" }
   }
 
-  print -e $"[hoyofall] supervising node, output ($outFile)"
-  loop {
-    # Nushell raises on a non-zero external exit; catch it so the daemon is
-    # restarted instead of taking service.nu down with it.
+  # Restart the bundled sing-box when hoyofall writes a new fragment (it reads
+  # its config once). Optional: `restart_singbox_on_change` in android.conf.
+  let singboxBin = ($MODULE | path join "bin" "sing-box")
+  if $restartSingbox and ($singboxBin | path exists) {
     try {
-      ^$node $index --config $config o+e>| save --append $log
-    } catch {|error| print -e $"[hoyofall] node pipeline error: ($error.msg)" }
-    let code = ($env.LAST_EXIT_CODE? | default 0)
-    print -e $"[hoyofall] node exited ($code); restarting in ($delay)s"
-    sleep ($delay | into duration --unit sec)
+      job spawn { restart-loop $outFile "sing-box" $interval }
+      print -e $"[hoyofall] will restart sing-box on fragment change"
+    } catch {|error| print -e $"[hoyofall] sing-box restarter not started: ($error.msg)" }
   }
+
+  service-names | each {|name|
+    job spawn { supervise $name $delay }
+  }
+  print -e $"[hoyofall] supervisors started; output ($outFile)"
+
+  # Keep the process (and its job threads) alive.
+  loop { sleep 3600sec }
 }

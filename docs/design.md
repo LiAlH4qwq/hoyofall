@@ -46,10 +46,11 @@ steps, generated service scripts, and the Android module logic. `pnpm lint` runs
 `scripts/check-shell.ts`, which fails on any `*.sh` / `*.bash` / `*.bats` file or
 bash/POSIX shebang outside a two-entry allowlist:
 
-- the **Android module bootstrap shims** (`post-fs-data.sh`, `service.sh`,
-  `action.sh`, `uninstall.sh`), which the Magisk/KernelSU module API requires to
+- the **Android module bootstrap shims** (`customize.sh`, `post-fs-data.sh`,
+  `service.sh`, `uninstall.sh`), which the Magisk/KernelSU module API requires to
   be shell — each is a single `exec` of the bundled Nushell (optionally via
-  `/system/bin/env` to hardcode `LD_LIBRARY_PATH`), no logic; and
+  `/system/bin/env` to hardcode `LD_LIBRARY_PATH`), except `customize.sh`, which
+  is a single `chmod 0755` to restore the exec bit the installer strips; and
 - **Nix `stdenv` build phases**, which run under bash by construction; keep them
   minimal and delegate to `nu -c` / `.nu`.
 

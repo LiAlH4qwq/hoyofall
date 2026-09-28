@@ -3,7 +3,7 @@
 [English](./README.md) · **简体中文**
 
 > 把 mihomo（Clash.Meta）订阅持续、原子地转换为 sing-box `outbounds`
-> ——无 WebUI。
+> ——无 Web UI。
 
 hoyofall 是一个小巧的无头后台服务：按各自独立的间隔抓取任意数量的 mihomo
 订阅，转换为 sing-box `outbounds`，并将可导入的片段写入磁盘（另可选 HTTP 端点，
@@ -61,14 +61,13 @@ hoyofall 是一个小巧的无头后台服务：按各自独立的间隔抓取�
 
 ```bash
 git clone https://github.com/LiAlH4qwq/hoyofall && cd hoyofall
-pnpm install && pnpm build                 # 产出 dist/index.js
-sudo install -d /etc/hoyofall /usr/local/lib/hoyofall
-sudo install -m 0644 dist/index.js /usr/local/lib/hoyofall/index.js
+pnpm install && pnpm build                 # 产出独立的 dist/index.js
+sudo install -d /etc/hoyofall
+sudo install -m 0755 dist/index.js /usr/local/bin/hoyofall
 sudo install -m 0644 config.example.yaml /etc/hoyofall/config.yaml
 ```
 
-用一行 `node` shim 包装为 `/usr/local/bin/hoyofall`，将
-`output.file.path` 指向 `/var/lib/hoyofall/fragment.json`，再安装
+将 `output.file.path` 指向 `/var/lib/hoyofall/fragment.json`，再安装
 [`contrib/systemd/hoyofall.service`](./contrib/systemd/hoyofall.service)：
 
 ```bash
@@ -87,11 +86,31 @@ nix build github:LiAlH4qwq/hoyofall        # ./result/bin/hoyofall
 nix profile install github:LiAlH4qwq/hoyofall
 ```
 
+然后直接运行：
+
 ```bash
 hoyofall --config /etc/hoyofall/config.yaml
 hoyofall --print-schema          # 打印配置 JSON Schema
 hoyofall --help
 ```
+
+## 在 Android 上运行（Magisk / KernelSU / SuKiSU / ReSuKiSU）
+
+hoyofall 以一体化可刷入模块发布：把同一份 `dist/index.js` 跑在预编译的 Android
+Node 上，由 Nushell 守护，**并附带受守护的 sing-box** 与 KernelSU **WebUI**
+（仪表盘、启动/停止、配置编辑、日志）：
+
+```bash
+nu android/build.nu --arch arm64      # node + nushell + sing-box，暂存模块树
+nu android/package.nu --arch arm64    # -> hoyofall-android-arm64.zip
+# 或使用 Nix 提供的预编译二进制：
+nix build .#hoyofall-android
+```
+
+用 Magisk/KernelSU 刷入该 zip；默认配置无需 token 即可启动。
+从 WebUI 或 `/data/adb/hoyofall/` 配置订阅与 sing-box。
+完整指南见 [docs/android.md](./docs/android.md)；拆分为独立模块的计划见
+[docs/android-future.md](./docs/android-future.md)（英文）。
 
 ## 文档
 
@@ -101,10 +120,9 @@ hoyofall --help
 | [Usage](./docs/usage.md) | CLI、HTTP 端点、导入 sing-box。 |
 | [Nix](./docs/nix.md) | flake 输出与 NixOS 模块。 |
 | [systemd](./docs/systemd.md) | 不使用 Nix 的运行方式。 |
+| [Android](./docs/android.md) | Magisk/KernelSU 模块、Node + Nushell 交叉编译。 |
 | [Design](./docs/design.md) | 函数式保证及其强制方式。 |
 | [Development](./docs/development.md) | 构建、测试与 AST 规则。 |
-
-（文档正文为英文。）
 
 ## 支持的转换
 
@@ -120,4 +138,7 @@ hoyofall --help
 
 ## 许可证
 
-[MIT](./LICENSE)
+hoyofall 自身代码为 [MIT](./LICENSE)。Android 模块还会按各自条款再分发第三方
+二进制——其中最显著的是 [GPL-3.0-or-later](./licenses/GPL-3.0-or-later.txt) 的
+sing-box——因此可刷入模块是聚合分发，并非整体以 MIT 重新授权。详见
+[THIRD_PARTY_LICENSES.md](./THIRD_PARTY_LICENSES.md)。

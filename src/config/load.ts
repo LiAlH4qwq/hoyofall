@@ -1,11 +1,11 @@
 import { FileSystem } from "@effect/platform"
 import { Effect, ParseResult, Schema } from "effect"
-import { parse as parseYaml } from "yaml"
 import {
   ConfigParseError,
   ConfigReadError,
   ConfigValidationError,
 } from "../errors"
+import { parseYamlUnknown } from "../yaml"
 import { Config, type ConvertOptions, type CustomGroup, type InstanceGroups, type Output, type Subscription, type SubscriptionGroups } from "./schema"
 
 export const decodeConfig = (
@@ -113,11 +113,6 @@ const subscriptionIssuesOf = (
   subscription: Subscription,
 ): Effect.Effect<ReadonlyArray<string>> =>
   Effect.gen(function* () {
-    const hasUrl = "url" in subscription && subscription.url !== undefined
-    const hasUrlEnv = "urlEnv" in subscription
-    const sourceIssues = hasUrl || hasUrlEnv
-      ? []
-      : [`subscriptions.${id}: one of url or urlEnv is required`]
     const excludeIssues = yield* regexIssues(
       `subscriptions.${id}.convert.exclude`,
       subscription.convert.exclude,
@@ -138,7 +133,6 @@ const subscriptionIssuesOf = (
       ),
     )
     return [
-      ...sourceIssues,
       ...excludeIssues,
       ...nativeIssues.flat(),
       ...customIssues.flat(),
@@ -158,7 +152,7 @@ export const loadConfig = (
       .readFileString(path)
       .pipe(Effect.mapError((cause) => new ConfigReadError({ path, cause })))
     const parsed = yield* Effect.try({
-      try: () => parseYaml(content) as unknown,
+      try: () => parseYamlUnknown(content),
       catch: (cause) =>
         new ConfigParseError({
           path,
@@ -196,12 +190,9 @@ export const resolveConfig = (
       Object.entries(config.subscriptions).map(
         ([id, subscription]): Effect.Effect<ResolvedSubscription, ConfigValidationError> => {
           const urlEffect =
-            "url" in subscription && subscription.url !== undefined
+            subscription.url !== undefined
               ? Effect.succeed(subscription.url)
-              : resolveEnv(
-                  "urlEnv" in subscription ? subscription.urlEnv : "",
-                  id,
-                )
+              : resolveEnv(subscription.urlEnv ?? "", id)
           return urlEffect.pipe(
             Effect.map(
               (url): ResolvedSubscription => ({

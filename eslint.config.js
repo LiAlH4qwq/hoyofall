@@ -4,7 +4,13 @@ import tseslint from "typescript-eslint"
 
 export default tseslint.config(
   {
-    ignores: ["dist/**", "node_modules/**", "result/**"],
+    ignores: [
+      "dist/**",
+      "node_modules/**",
+      "result/**",
+      "android/module/webroot/app.js",
+      "android/module/webroot/app.js.map",
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

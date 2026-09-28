@@ -38,6 +38,14 @@ def sha256-of [path: path] {
   open $path --raw | hash sha256
 }
 
+def revision-parts [revision: string] {
+  let parts = ($revision | split row ".")
+  {
+    major: ($parts | first | into int)
+    minor: (if ($parts | length) > 1 { $parts | get 1 } else { "0" } | into int)
+  }
+}
+
 def main [
   --root: string = ""        # repository root (defaults to this script's repo)
   --source: string = ""      # use an already-extracted Nushell source tree
@@ -88,6 +96,12 @@ def main [
     | split row "="
     | last
     | str trim)
+  let required = (revision-parts $lock.ndk_revision_min)
+  let current = (revision-parts $revision)
+  if ($current.major < $required.major)
+    or (($current.major == $required.major) and ($current.minor < $required.minor)) {
+    error make { msg: $"NDK ($revision) is older than the required >= ($lock.ndk_revision_min)" }
+  }
   print -e $"NDK ($ndk) revision ($revision), Nushell ($lock.nushell_version), arch ($arch), api ($api)"
 
   let toolchain = ($ndk | path join "toolchains" "llvm" "prebuilt" $host)
@@ -140,6 +154,9 @@ def main [
   }
 
   let patches = (glob ($root | path join "android" "nushell" "patches" "termux" "*.patch") | sort)
+  if ($patches | length) == 0 {
+    error make { msg: "no Termux patches found under android/nushell/patches/termux" }
+  }
   $patches | each {|patch|
     print -e $"applying ($patch | path basename)"
     ^patch -p1 -d $src -i $patch
