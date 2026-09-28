@@ -102,6 +102,22 @@ hoyofall --print-schema          # configuration JSON Schema
 hoyofall --help
 ```
 
+## Run on Android (Magisk / KernelSU / SuKiSU / ReSuKiSU)
+
+hoyofall ships as a flashable module that runs the same `dist/index.js` on a
+cross-compiled Android Node, with all module logic in Nushell:
+
+```bash
+nu android/build.nu --arch arm64      # cross-compile node + nushell, stage module
+nu android/package.nu --arch arm64    # -> hoyofall-android-arm64.zip
+```
+
+Flash the zip with Magisk/KernelSU, copy `config.example.yaml` to
+`/data/adb/hoyofall/config.yaml`, put subscription tokens in
+`/data/adb/hoyofall/hoyofall.env`, and the module writes the fragment into your
+sing-box module's config directory. Full guide:
+[docs/android.md](./docs/android.md).
+
 ## Documentation
 
 | Page | Contents |
@@ -110,6 +126,7 @@ hoyofall --help
 | [Usage](./docs/usage.md) | CLI, HTTP endpoints, importing into sing-box. |
 | [Nix](./docs/nix.md) | Flake outputs and the NixOS module. |
 | [systemd](./docs/systemd.md) | Running without Nix. |
+| [Android](./docs/android.md) | Magisk/KernelSU module, Node + Nushell cross-compilation. |
 | [Design](./docs/design.md) | Functional guarantees and how they are enforced. |
 | [Development](./docs/development.md) | Build, test, and the AST rules. |
 

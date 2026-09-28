@@ -1,0 +1,78 @@
+# Build the Android module.
+#
+# Everything this repository authors is Nushell, including CI: the default run
+# shell is `nu`, so no step is a bash script. (Nushell is installed by the
+# `hustcer/setup-nu` action before any `run` step executes.)
+#
+# The Node cross-compilation is long (upstream Node-on-Android is unsupported and
+# carries the Termux patches), hence the generous timeout and caches.
+
+name: android
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  module:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    defaults:
+      run:
+        shell: nu --no-config-file {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hustcer/setup-nu@v1
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "26"
+          cache: pnpm
+
+      - uses: nttld/setup-ndk@v1
+        id: ndk
+        with:
+          ndk-version: r28
+
+      - name: Cache builds
+        uses: actions/cache@v4
+        with:
+          path: |
+            android/.cache
+            android/build
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.rustup/toolchains
+          key: android-${{ runner.os }}-${{ hashFiles('android/**/versions.lock', 'android/**/*.patch') }}
+
+      - name: Install dependencies and bundle
+        run: |
+          ^pnpm install --frozen-lockfile
+          ^pnpm build
+
+      - name: Add Rust Android target
+        run: |
+          ^rustup target add aarch64-linux-android
+
+      - name: Cross-compile Node, Nushell and stage the module
+        run: |
+          ^nu android/build.nu --arch arm64 --ndk $env.ANDROID_NDK_HOME
+
+      - name: Package the flashable zip
+        run: |
+          ^nu android/package.nu --arch arm64
+
+      - name: Upload module
+        uses: actions/upload-artifact@v4
+        with:
+          name: hoyofall-android-arm64
+          path: android/dist/hoyofall-android-arm64.zip
+          if-no-files-found: error

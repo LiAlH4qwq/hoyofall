@@ -5,6 +5,8 @@ hoyofall ships a flake with:
 | Output | Contents |
 |---|---|
 | `packages.<system>.hoyofall` (and `default`) | The Node bundle plus `share/hoyofall/schema.json`. |
+| `packages.<system>.hoyofall-android` | Flashable Magisk/KernelSU module for Android arm64 (prebuilt Termux payload). |
+| `devShells.<system>.android` | Host toolchain + Android NDK for building the pinned subprojects. |
 | `overlays.default` | Adds `pkgs.hoyofall`. |
 | `nixosModules.default` | A single-instance `services.hoyofall` module. |
 
@@ -91,7 +93,30 @@ enough.
   `systemd.services.hoyofall.requires` / `.after = [ "sops-install-secrets.service" ]`
   so `EnvironmentFile` exists on first activation.
 
+## Android
+
+`nix/android.nix` assembles the flashable Android module from **prebuilt Termux
+aarch64 binaries** (Node, Nushell and their shared libraries), fetched as
+fixed-output derivations, then reuses the repository's Nushell staging/zip logic
+(`android/build.nu --stage-only`, `android/package.nu`):
+
+```bash
+nix build .#hoyofall-android   # result/{module,hoyofall-android-arm64.zip}
+nix develop .#android          # host toolchain + NDK for the pinned scripts
+```
+
+nixpkgs' `pkgsCross.aarch64-android*` sets are deliberately not used: they are
+uncached and broken when built from source (compiler-rt, tzdata, …). Every Termux
+package is a fixed-output download, so the build runs offline once fetched;
+versions/hashes are pinned in `nix/android.nix`. On dual-stack/TUN hosts where
+IPv6 to some hosts is reset, force IPv4 for the Nix daemon (see
+[android.md](./android.md#troubleshooting)). Full guide: [android.md](./android.md).
+
 ## Updating the package
 
-`nix/package.nix` builds with pnpm + rolldown. If a dependency changes, refresh
-`pnpmDeps.hash`: build, then copy the `got:` hash from the mismatch.
+`nix/package.nix` builds with pnpm + rolldown. pnpm's store format changes
+between majors, so the flake pins `pnpm_12` and the dependency hash is a
+per-system map (`pnpmDepsHashes`, with a `default`). Refresh it when
+`pnpm-lock.yaml` or the pnpm major changes: set the hash to `lib.fakeHash`, run
+`nix build .#hoyofall` on that system, and copy the reported `got: sha256-…`
+value (add a system override if it differs from `default`).

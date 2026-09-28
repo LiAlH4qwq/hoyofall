@@ -1,0 +1,83 @@
+:root {
+  color-scheme: light dark;
+  --fg: #1b1b1b;
+  --muted: #6b6b6b;
+  --bg: #faf7f2;
+  --card: #ffffff;
+  --accent: #c1663f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fg: #ececec;
+    --muted: #9a9a9a;
+    --bg: #14100d;
+    --card: #1d1814;
+    --accent: #e08a5f;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 1.5rem;
+  font: 16px/1.5 system-ui, sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+main {
+  max-width: 42rem;
+  margin: 0 auto;
+}
+
+h1 {
+  margin: 0 0 0.25rem;
+  color: var(--accent);
+}
+
+h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+section {
+  margin-top: 1.25rem;
+  padding: 1rem;
+  background: var(--card);
+  border-radius: 0.75rem;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: 9rem 1fr;
+  gap: 0.25rem 0.75rem;
+  margin: 0;
+}
+
+dt {
+  color: var(--muted);
+}
+
+dd {
+  margin: 0;
+  word-break: break-all;
+}
+
+code {
+  font-family: ui-monospace, monospace;
+  font-size: 0.875em;
+}
+
+ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}

@@ -8,12 +8,19 @@ the type system.
 ```bash
 pnpm install
 pnpm typecheck   # tsc --noEmit
-pnpm lint        # eslint + scripts/check-ast.ts
+pnpm lint        # eslint + scripts/check-ast.ts + scripts/check-shell.ts
 pnpm check:ast   # AST-level functional-rule enforcement only
 pnpm test        # vitest
-pnpm check       # typecheck + lint + ast + test
+pnpm check       # typecheck + lint + ast + shell + test
 pnpm build       # rolldown bundle + JSON schema
 pnpm dev --config config.yaml
+```
+
+Android cross-compilation is driven by Nushell, not bash:
+
+```bash
+nu android/build.nu --arch arm64      # node + nushell + module payload
+nu android/package.nu --arch arm64    # hoyofall-android-arm64.zip
 ```
 
 ## Layout
@@ -25,7 +32,10 @@ pnpm dev --config config.yaml
 - `src/output/` – atomic file output
 - `src/server/` – optional HTTP endpoints
 - `src/diagnostics.ts` – CLI usage and friendly error formatting
-- `scripts/check-ast.ts` – AST enforcement of the rules below
+- `scripts/check-ast.ts` – AST enforcement of the functional rules
+- `scripts/check-shell.ts` – bans authored bash / POSIX shell scripts
+- `android/node/` – cross-compiles Node for Android; `android/nushell/` –
+  cross-compiles Nushell; `android/module/` – Magisk/KernelSU payload
 - `nix/` – `package.nix`, `overlay.nix`, NixOS `module.nix`; `flake.nix`
 
 ## Enforced AST rules
@@ -44,6 +54,14 @@ array members, the `any` keyword, and `as unknown as` double assertions.
 
 Use `const`, `Array.map` / `filter` / `reduce` / `flatMap`, `Effect.all`,
 `Effect.try` / `Effect.tryPromise`, and typed errors instead.
+
+## Shell rule
+
+Bash is banned; authored scripts are Nushell. `pnpm lint` also runs
+`scripts/check-shell.ts`, which fails on any `.sh` / `.bash` / `.bats` file or
+bash/POSIX shebang outside the allowlist. The only exceptions are the exec-only
+Android module shims (see [`android.md`](./android.md#shims)) and Nix `stdenv`
+build phases. Full rationale: [`design.md`](./design.md#shell-discipline).
 
 ## Tests
 

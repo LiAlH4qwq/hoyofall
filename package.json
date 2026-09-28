@@ -14,8 +14,8 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "check:ast": "tsx scripts/check-ast.ts",
-    "lint": "eslint . && tsx scripts/check-ast.ts",
-    "check": "tsc --noEmit && eslint . && tsx scripts/check-ast.ts && vitest run",
+    "lint": "eslint . && tsx scripts/check-ast.ts && tsx scripts/check-shell.ts",
+    "check": "tsc --noEmit && eslint . && tsx scripts/check-ast.ts && tsx scripts/check-shell.ts && vitest run",
     "test": "vitest run",
     "test:watch": "vitest"
   },

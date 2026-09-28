@@ -111,4 +111,14 @@ export default tseslint.config(
       "functional/immutable-data": "off",
     },
   },
+  {
+    // Browser globals for the KernelSU WebUI page.
+    files: ["android/module/webroot/**/*.js"],
+    languageOptions: {
+      globals: {
+        document: "readonly",
+        fetch: "readonly",
+      },
+    },
+  },
 )

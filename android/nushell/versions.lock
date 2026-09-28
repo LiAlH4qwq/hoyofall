@@ -1,0 +1,27 @@
+# Pinned inputs for the Android Nushell cross-compilation.
+# Parsed by build.nu with `open --raw | from toml`. Do not float these.
+
+nushell_version = "0.116.0"
+nushell_tarball = "nushell-0.116.0.tar.gz"
+nushell_url = "https://github.com/nushell/nushell/archive/refs/tags/0.116.0.tar.gz"
+nushell_sha256 = "1174d023ffc8083750daec8ee2dfe6486a8ef9f5c22396aa675b61d1bb0fad2d"
+
+# Minimum Rust toolchain (Nushell's `rust-version`).
+rust_version = "1.96.1"
+
+# Android API level and architectures.
+api_level = "24"
+default_arch = "arm64"
+
+# NDK pinned by revision, supplied via --ndk or ANDROID_NDK_ROOT/ANDROID_NDK_HOME.
+ndk_revision_min = "26.0.0"
+
+# Default feature set: minimal. The module's `.nu` scripts use core Nushell +
+# external toybox/busybox applets; they do not need http/sqlite/plugin/lsp/dap.
+# Add features explicitly with `--features network,rustls-tls` if a script grows
+# to need `http`. The subproject is meant to be extracted and grown later.
+default_features = ""
+
+# Provenance of the vendored patch (files are committed under patches/termux).
+patches_provenance = "termux/termux-packages"
+patches_commit = "4deaf1ad3b44146ec6c8a6dd32da0c09b00d387c"

@@ -18,12 +18,19 @@ effect-based formulation.
 ```bash
 pnpm install
 pnpm typecheck   # tsc --noEmit
-pnpm lint        # eslint . && tsx scripts/check-ast.ts
+pnpm lint        # eslint . && tsx scripts/check-ast.ts && tsx scripts/check-shell.ts
 pnpm check:ast   # AST-level functional-rule enforcement only
 pnpm test        # vitest
-pnpm check       # typecheck + lint + ast + test
+pnpm check       # typecheck + lint + ast + shell + test
 pnpm build       # rolldown bundle + JSON schema (dist/)
 pnpm dev --config config.yaml
+```
+
+Android cross-compilation has its own Nushell entrypoints (Nushell, not bash):
+
+```
+nu android/build.nu --arch arm64      # node + nushell + module payload
+nu android/package.nu --arch arm64    # hoyofall-android-arm64.zip
 ```
 
 ## Layout
@@ -35,6 +42,9 @@ pnpm dev --config config.yaml
 - `src/output/` – atomic file output; `src/server/` – optional HTTP endpoints
 - `src/diagnostics.ts` – CLI usage and friendly error formatting
 - `scripts/check-ast.ts` – AST enforcement of the rules below
+- `scripts/check-shell.ts` – bans authored bash / POSIX shell scripts
+- `android/` – Android subprojects: `node/` and `nushell/` cross-compilation,
+  `module/` (Magisk/KernelSU payload), `build.nu`, `package.nu`
 - `nix/` – `package.nix`, `overlay.nix`, NixOS `module.nix`; `flake.nix`
 
 ## Hard rules (enforced by `pnpm lint`)
@@ -62,6 +72,55 @@ ESLint mirrors these with `no-restricted-syntax` and
 Replace the forbidden constructs with `const`, `Array.map` / `filter` /
 `reduce` / `flatMap`, `Effect.all`, `Effect.try` / `Effect.tryPromise`,
 `Match`, and typed errors.
+
+## Shells and scripts (hard rule)
+
+**bash is banned.** Every script this repository authors or ships — build and
+orchestration scripts, CI steps, generated service scripts, and the Android
+module logic — is **Nushell** (`.nu`). Do not add `*.sh`, `*.bash` or `*.bats`
+files, and do not use a bash/POSIX shebang.
+
+`pnpm lint` runs `scripts/check-shell.ts`, which walks the tree and fails on any
+shell file or `#!/bin/bash` / `#!/bin/sh` shebang outside the allowlist below.
+
+Two deliberate exceptions:
+
+- **Android module bootstrap shims.** The Magisk/KernelSU module API executes
+  `post-fs-data.sh`, `service.sh`, `action.sh` and `uninstall.sh` with the
+  system shell, so these files are the *only* permitted shell scripts. Their
+  whole body must be a single `exec` of the bundled Nushell (optionally via
+  `/system/bin/env` to hardcode `LD_LIBRARY_PATH` to the module's `lib/`) with
+  the module path hardcoded; no logic, conditionals, or variable expansion.
+  Everything else lives in the matching `.nu` file.
+- **Nix `stdenv` build phases.** Nix builders run their phases under bash by
+  construction. Keep phase logic minimal and delegate to `nu -c '…'` / `.nu`
+  scripts wherever practical.
+
+Across the rest of the repository, port logic to Nushell rather than writing a
+shell script.
+
+## Android subprojects
+
+`android/` holds two vendored cross-compilation subprojects plus the module
+payload. They are part of this repository but are kept self-contained so they
+can be split out later (the Nushell port in particular starts minimal and grows
+toward a full build):
+
+- `android/node/` – cross-compiles Node for Android (`aarch64-linux-android`,
+  later `x86_64`). `versions.lock` pins the NDK and Node; `patches/` vendors the
+  Termux `nodejs` patch set; `build.nu` drives `android-configure` + `make`.
+- `android/nushell/` – cross-compiles Nushell for Android. `versions.lock` pins
+  Nushell; `patches/` vendors the Termux `sysinfo` patch; `build.nu` drives
+  Cargo with the NDK linker and the reduced feature set.
+- `android/module/` – the Magisk-format module: exec-only `.sh` shims plus
+  `.nu` logic, default config, and optional KernelSU `webroot/`.
+- `android/build.nu` orchestrates node + nushell + module; `android/package.nu`
+  assembles `hoyofall-android-<arch>.zip`.
+
+Rules: pin every tool version and patch (no floating downloads); scripts are
+Nushell; the module's logic is Nushell with the shim exception above; the
+sing-box integration is configured, never hardcoded to one module layout. See
+[`docs/android.md`](./docs/android.md).
 
 ## Effect rules
 
@@ -154,11 +213,19 @@ small helper and justify it in a comment.
 
 ## Nix
 
-- `flake-parts`: `perSystem.packages.hoyofall` (and `default`), `overlays`,
-  `nixosModules`.
-- `nix/package.nix` builds with pnpm + rolldown; if a dependency changes, the
-  `pnpmDeps.hash` in `nix/package.nix` must be refreshed (build, then copy the
-  `got:` hash from the mismatch).
+- `flake-parts`: `perSystem.packages.hoyofall` (and `default`),
+  `packages.hoyofall-android` (`nix/android.nix`: the flashable module assembled
+  from **prebuilt Termux aarch64 binaries**, fetched as fixed-output
+  derivations, then staged/zipped by `android/build.nu` / `android/package.nu`),
+  `devShells.default`, `devShells.android` (host toolchain + NDK for building the
+  pinned subprojects from source), `overlays`, `nixosModules`. nixpkgs'
+  `pkgsCross.aarch64-android*` sets are intentionally unused (uncached and broken
+  from source).
+- `nix/package.nix` builds with pnpm + rolldown. The pnpm store format changes
+  between pnpm majors, so `flake.nix` pins `pnpm_12` and the dependency hash
+  lives in a per-system `pnpmDepsHashes` map (with a `default`); refresh it when
+  `pnpm-lock.yaml` or the pnpm major changes by setting `lib.fakeHash`, building,
+  and copying the `got:` hash. See the comment in `nix/package.nix`.
 - `nix/module.nix` is **single-instance**: it generates `hoyofall.service` and
   validates `settings` against the shipped `schema.json` with
   `check-jsonschema`. It defaults `output.file.path` / `output.file.directory`
@@ -171,4 +238,5 @@ small helper and justify it in a comment.
 - **No bash in module scripts.** Any generated systemd script must be Nushell
   via `pkgs.writers.writeNu`, preferring Nushell builtins
   (`mkdir`/`cp`/`path exists`/`hash sha256`/`sleep`) and only falling back to
-  external commands (`^systemctl`, uutils) when there is no builtin.
+  external commands (`^systemctl`, uutils) when there is no builtin. This is a
+  special case of the repository-wide [shell rule](#shells-and-scripts-hard-rule).

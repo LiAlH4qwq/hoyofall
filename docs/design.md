@@ -38,6 +38,25 @@ State is functional: a subscription's latest conversion is carried in a
 no mutable cache. The HTTP routes read the same published snapshots the file
 writer does.
 
+## Shell discipline
+
+Bash is banned. Every script this repository authors or ships is
+[Nushell](https://www.nushell.sh/) (`.nu`): build and orchestration scripts, CI
+steps, generated service scripts, and the Android module logic. `pnpm lint` runs
+`scripts/check-shell.ts`, which fails on any `*.sh` / `*.bash` / `*.bats` file or
+bash/POSIX shebang outside a two-entry allowlist:
+
+- the **Android module bootstrap shims** (`post-fs-data.sh`, `service.sh`,
+  `action.sh`, `uninstall.sh`), which the Magisk/KernelSU module API requires to
+  be shell — each is a single `exec` of the bundled Nushell (optionally via
+  `/system/bin/env` to hardcode `LD_LIBRARY_PATH`), no logic; and
+- **Nix `stdenv` build phases**, which run under bash by construction; keep them
+  minimal and delegate to `nu -c` / `.nu`.
+
+Nushell is not POSIX shell: compose structured data through Nushell's own
+pipelines (`where`, `each`, `reduce`, `get`, `from json`, `to json`, `path
+join`, `path exists`, `hash sha256`), not through external text utilities.
+
 ## Secure by construction
 
 - **Tokens stay out of files.** `urlEnv` reads the subscription URL from an

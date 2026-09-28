@@ -9,6 +9,29 @@
   pnpm,
 }:
 
+let
+  # `fetchPnpmDeps` runs `pnpm install --force`, which fetches dependencies for
+  # every platform, so its output is usually identical across systems; `default`
+  # covers those. If a platform's store genuinely differs, add an override keyed
+  # by `stdenv.hostPlatform.system` (the build then tells you the `got:` hash).
+  #
+  # To regenerate: set the value to `lib.fakeHash`, run `nix build .#hoyofall` on
+  # that system, and copy the `got: sha256-…` value. Remember to do this when the
+  # pnpm major changes, since its store format is not stable across majors (we
+  # pin pnpm to a major in flake.nix for exactly this reason).
+  pnpmDepsHashes = {
+    default = "sha256-B0aFBHNFG5YAjpWIvRMKCZqRnbgDUApPZwI8G0G73RY=";
+    # x86_64-linux = "sha256-…";
+    # aarch64-linux = "sha256-…";
+    # x86_64-darwin = "sha256-…";
+    # aarch64-darwin = "sha256-…";
+  };
+
+  system = stdenv.hostPlatform.system;
+
+  pnpmDepsHash = pnpmDepsHashes.${system} or pnpmDepsHashes.default;
+in
+
 stdenv.mkDerivation (finalAttrs: {
   pname = "hoyofall";
   version = "0.1.0";
@@ -33,7 +56,7 @@ stdenv.mkDerivation (finalAttrs: {
     inherit (finalAttrs) pname version src;
     inherit pnpm;
     fetcherVersion = 4;
-    hash = "sha256-DG9bqGWsqJlJluHf9dMAuuuyEsIzwxVhyB0Ygj4LwYw=";
+    hash = pnpmDepsHash;
   };
 
   nativeBuildInputs = [

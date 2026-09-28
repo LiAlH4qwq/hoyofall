@@ -1,0 +1,49 @@
+# hoyofall configuration for the Android module.
+#
+# The module copies this to /data/adb/hoyofall/config.yaml on first boot and
+# never overwrites an existing file. Subscription tokens belong in
+# /data/adb/hoyofall/hoyofall.env (see hoyofall.env.example), referenced here
+# with urlEnv, so this file stays free of secrets.
+#
+# Point `output.file.path` anywhere readable by your sing-box module. The
+# module's own watcher can also copy the fragment into the sing-box config
+# directory; see /data/adb/hoyofall/android.conf.
+
+groups:
+  custom:
+    auto:
+      type: urltest
+      includeProxies: true
+      includeRegexes: []
+      onEmpty: skip
+    proxy:
+      type: selector
+      includeProxies: true
+      includeCustomGroups: true
+      includeDirect: true
+      onEmpty: skip
+
+convert:
+  emitBuiltinOutbounds: false
+  proxyNameFormat: "{sub}-{name}"
+
+subscriptions:
+  default:
+    name: default
+    urlEnv: HOYOFALL_SUB_URL
+    intervalSeconds: 3600
+    format: auto
+    onUnsupported: skip
+
+output:
+  file:
+    enabled: true
+    mode: aggregate
+    path: /data/adb/hoyofall/out/fragment.json
+    permissions: "0644"
+    pretty: true
+  http:
+    enabled: false
+    listen:
+      host: 127.0.0.1
+      port: 9090

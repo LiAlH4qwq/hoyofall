@@ -1,0 +1,6 @@
+id=hoyofall
+name=hoyofall
+version=v0.1.0
+versionCode=1
+author=LiAlH4qwq
+description=Convert mihomo (Clash.Meta) subscriptions into sing-box outbound fragments — headless, atomic, Nushell.

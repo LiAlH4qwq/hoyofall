@@ -1,0 +1,20 @@
+# Pinned inputs for the Android Node cross-compilation.
+# Parsed by build.nu with `open --raw | from toml`. Do not float these.
+
+node_version = "26.4.0"
+node_tarball = "node-v26.4.0.tar.xz"
+node_url = "https://nodejs.org/dist/v26.4.0/node-v26.4.0.tar.xz"
+# Source-tarball checksum, also published in nodejs.org/dist/v26.4.0/SHASUMS256.txt.
+node_sha256 = "9eceb3621024069d91035b5471d2ebe86aa04d22dbeba72a782eaf36ff9183ac"
+
+# Android API level and architectures. Node's android-configure requires >= 24.
+api_level = "24"
+default_arch = "arm64"
+
+# NDK: pinned by revision, supplied via --ndk or ANDROID_NDK_ROOT/ANDROID_NDK_HOME.
+# Node 26 needs a modern clang (>= 19), i.e. NDK r28 or newer.
+ndk_revision_min = "28.0.0"
+
+# Where the vendored patches came from (provenance only; the files are committed).
+patches_provenance = "termux/termux-packages"
+patches_commit = "4deaf1ad3b44146ec6c8a6dd32da0c09b00d387c"

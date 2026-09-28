@@ -1,0 +1,31 @@
+# hoyofall Android module settings (TOML).
+#
+# The module seeds this file to /data/adb/hoyofall/android.conf on first boot.
+# It is read by service.nu, which runs the daemon and can inject the fragment
+# into a sing-box module.
+
+# Poll the fragment and, on change, deliver it to sing-box.
+watch_singbox = true
+
+# sing-box module config directory. Empty disables injection. Common layouts:
+#   /data/adb/box/conf        (box-for-magisk)
+#   /data/adb/sing-box/conf   (sing-box module)
+# The watcher copies the aggregate fragment here and runs singbox_reload.
+singbox_dir = ""
+
+# Filename to write inside singbox_dir.
+singbox_target = "hoyofall.json"
+
+# Reload hook: an argv list, run after each delivered fragment. Empty = none.
+# Examples:
+#   singbox_reload = ["/system/bin/pkill", "-HUP", "sing-box"]
+#   singbox_reload = ["/data/adb/modules/sing-box/action.sh"]
+singbox_reload = []
+
+# Seconds between fragment polls, and between daemon restarts.
+watch_interval_seconds = 5
+restart_delay_seconds = 5
+
+# Where hoyofall writes the aggregate fragment. Must match
+# output.file.path in config.yaml.
+# out_file = "/data/adb/hoyofall/out/fragment.json"

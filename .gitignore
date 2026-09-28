@@ -9,3 +9,9 @@ result-*
 # local configuration (may contain subscription tokens)
 config.yaml
 config.local.yaml
+
+# Android cross-compilation scratch and staged payloads
+android/.cache/
+android/build/
+android/dist/
+
