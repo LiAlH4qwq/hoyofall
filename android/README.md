@@ -51,8 +51,11 @@ source).
    route through a hoyofall group.
 
 The module's WebUI has a **Dashboard** and a **Control / Config / Log** page for
-each of hoyofall and sing-box. On KernelSU / SuKiSU / ReSuKiSU it opens from the
-module page; on **Magisk** (and APatch) install the standalone KernelSU WebUI app
+each of hoyofall and sing-box. The **Config** page offers a schema-driven
+**Form** (hoyofall only), a **Nushell** source editor (`config.nu`, rendered and
+validated on save), and **Raw** text. On KernelSU / SuKiSU / ReSuKiSU it opens
+from the module page; on **Magisk** (and APatch) install the standalone KernelSU
+WebUI app
 ([`KsuWebUIStandalone`](https://github.com/5ec1cff/KsuWebUIStandalone)) and open
 hoyofall from there. There is no Magisk action button; the same actions are
 available via `control.nu`:
@@ -68,11 +71,13 @@ su -c '/system/bin/env LD_LIBRARY_PATH=/data/adb/modules/hoyofall/lib /data/adb/
 | `/data/adb/modules/hoyofall/` | Code only: shims, `.nu`, `bin/{node,nu,sing-box}`, `index.js`, `schema.json`, `lib/`, `webroot/`, seed `config/`. |
 | `/data/adb/hoyofall/` | Global data dir; `android.conf` (supervisor settings) lives here. |
 | `/data/adb/hoyofall/hoyofall/config.yaml` | hoyofall configuration (seeded on first boot). |
+| `/data/adb/hoyofall/hoyofall/config.nu` | Optional Nushell config source; rendered to `config.yaml` on save. |
 | `/data/adb/hoyofall/hoyofall/hoyofall.env` | Subscription tokens (`urlEnv`). |
 | `/data/adb/hoyofall/hoyofall/out/fragment.json` | Atomic aggregate fragment; sing-box's `-C` dir. |
 | `/data/adb/hoyofall/hoyofall/disabled` | Present when hoyofall is stopped via the WebUI/`control.nu`. |
 | `/data/adb/hoyofall/hoyofall/log/hoyofall.log` | hoyofall stdout/stderr. |
 | `/data/adb/hoyofall/sing-box/config.json` | sing-box configuration (seeded). |
+| `/data/adb/hoyofall/sing-box/config.nu` | Optional Nushell config source; rendered to `config.json` on save. |
 | `/data/adb/hoyofall/sing-box/cache/` | sing-box working dir (`-D`): cache and Clash-API UI. |
 | `/data/adb/hoyofall/sing-box/disabled` | Present when sing-box is stopped. |
 | `/data/adb/hoyofall/sing-box/log/sing-box.log` | sing-box stdout/stderr. |

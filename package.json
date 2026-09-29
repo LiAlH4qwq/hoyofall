@@ -1,6 +1,6 @@
 {
   "name": "hoyofall",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "description": "mihomo (Clash.Meta) subscription to sing-box outbound fragment converter",
@@ -14,9 +14,10 @@
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
+    "typecheck:webui": "tsc --noEmit -p android/webui/tsconfig.json",
     "check:ast": "tsx scripts/check-ast.ts",
     "lint": "eslint . && tsx scripts/check-ast.ts && tsx scripts/check-shell.ts",
-    "check": "tsc --noEmit && eslint . && tsx scripts/check-ast.ts && tsx scripts/check-shell.ts && vitest run",
+    "check": "tsc --noEmit && tsc --noEmit -p android/webui/tsconfig.json && eslint . && tsx scripts/check-ast.ts && tsx scripts/check-shell.ts && vitest run",
     "test": "vitest run",
     "test:watch": "vitest"
   },

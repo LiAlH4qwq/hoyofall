@@ -99,6 +99,7 @@ Then run it directly:
 
 ```bash
 hoyofall --config /etc/hoyofall/config.yaml
+hoyofall --check --config /etc/hoyofall/config.yaml   # validate and exit
 hoyofall --print-schema          # configuration JSON Schema
 hoyofall --help
 ```
@@ -107,7 +108,8 @@ hoyofall --help
 
 hoyofall ships as an all-in-one flashable module: the same `dist/index.js` on a
 prebuilt Android Node, supervised by Nushell, **plus a supervised sing-box** and
-a KernelSU **WebUI** (dashboard, start/stop, config editor, logs). Nix assembles
+a KernelSU **WebUI** (dashboard, start/stop, config editor — schema form,
+Nushell, or raw — and logs). Nix assembles
 it from prebuilt Termux aarch64 binaries and the upstream sing-box build (all
 fixed-output downloads):
 

@@ -91,6 +91,7 @@ nix profile install github:LiAlH4qwq/hoyofall
 
 ```bash
 hoyofall --config /etc/hoyofall/config.yaml
+hoyofall --check --config /etc/hoyofall/config.yaml   # 校验后退出
 hoyofall --print-schema          # 打印配置 JSON Schema
 hoyofall --help
 ```

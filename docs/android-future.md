@@ -75,11 +75,16 @@ Apps register a **service spec** rather than editing supervisor code:
 These are already used; splitting must preserve them or bump a protocol version.
 
 - **Service spec** (`services.nu`): `service-names`, `service-spec <name>`,
-  `service-status <name>`, `stop-service <name>`, `pids <pattern>`.
+  `service-status <name>`, `stop-service <name>`, `pids <pattern>`. The spec
+  record is `{ name, bin, args, config, source, format, check, log, flag }`:
+  `source` is the optional Nushell config document, `format` its render format,
+  and `check` the validator command (empty = no standalone check).
 - **Control protocol** (`control.nu`): `control.nu <action> [service]` where
-  `action ∈ {status,start,stop,restart,config,set-config,log}` and
-  `set-config` reads base64 from `$env.HOYOFALL_CONFIG_B64`. `status` returns
-  compact JSON `{enabled,running,supervisor}` (or an array with `service`).
+  `action ∈ {status,start,stop,restart,config,config-source,set-config,
+  render-config,set-source,log}` and the write actions read base64 from
+  `$env.HOYOFALL_CONFIG_B64`. `set-config`/`set-source` validate before
+  committing; `render-config` renders without writing. `status` returns compact
+  JSON `{enabled,running,supervisor}` (or an array with `service`).
 - **Supervision**: a service is a long-running `bin`+`args`, restarted on exit,
   with its `flag` file meaning "stopped"; the supervisor process itself never
   exits so `start` works without a reboot.

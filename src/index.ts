@@ -1,46 +1,13 @@
 import { NodeContext, NodeHttpClient, NodeRuntime } from "@effect/platform-node"
 import { Effect, JSONSchema, Layer, type PubSub } from "effect"
+import { parseCommand } from "./cli"
 import { loadConfig, resolveConfig, type ResolvedConfig } from "./config/load"
 import { Config } from "./config/schema"
 import { formatDiagnostic, usage, version } from "./diagnostics"
-import { UsageError } from "./errors"
 import type { CacheMap } from "./pipeline/types"
 import { startInstance } from "./pipeline/state"
 import { serverLayer } from "./server/app"
 import { makeRouter } from "./server/routes"
-
-type Command =
-  | { readonly _tag: "Help" }
-  | { readonly _tag: "Version" }
-  | { readonly _tag: "PrintSchema" }
-  | { readonly _tag: "Run"; readonly configPath: string }
-
-const findConfigPath = (argv: ReadonlyArray<string>): string | undefined => {
-  const equals = argv.find((arg) => arg.startsWith("--config="))
-  if (equals !== undefined) {
-    return equals.slice("--config=".length)
-  }
-  const index = argv.findIndex((arg) => arg === "--config" || arg === "-c")
-  return index >= 0 ? argv[index + 1] : undefined
-}
-
-const parseCommand = (
-  argv: ReadonlyArray<string>,
-): Effect.Effect<Command, UsageError> => {
-  if (argv.includes("--help") || argv.includes("-h")) {
-    return Effect.succeed({ _tag: "Help" })
-  }
-  if (argv.includes("--version") || argv.includes("-v")) {
-    return Effect.succeed({ _tag: "Version" })
-  }
-  if (argv.includes("--print-schema")) {
-    return Effect.succeed({ _tag: "PrintSchema" })
-  }
-  const configPath = findConfigPath(argv)
-  return configPath === undefined || configPath.startsWith("-")
-    ? Effect.fail(new UsageError({ message: "Missing required option: --config <path>." }))
-    : Effect.succeed({ _tag: "Run", configPath })
-}
 
 const write = (text: string, to: "stdout" | "stderr"): Effect.Effect<void> =>
   Effect.sync(() => {
@@ -79,6 +46,15 @@ const program = Effect.gen(function* () {
     }
     case "PrintSchema": {
       yield* write(`${JSON.stringify(JSONSchema.make(Config), null, 2)}\n`, "stdout")
+      return
+    }
+    case "Check": {
+      yield* Effect.logInfo(`checking configuration ${command.configPath}`)
+      const config = yield* loadConfig(command.configPath)
+      yield* write(
+        `configuration ok (${Object.keys(config.subscriptions).length} subscription(s))\n`,
+        "stdout",
+      )
       return
     }
     case "Run": {

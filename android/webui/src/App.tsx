@@ -2,10 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import CodeMirror from "@uiw/react-codemirror"
 import { yaml } from "@codemirror/lang-yaml"
 import { json } from "@codemirror/lang-json"
+import { Effect } from "effect"
+import { parse } from "yaml"
 import {
   SERVICES,
   readConfig,
+  readConfigSource,
   readLog,
+  renderConfigSource,
   restart,
   run,
   start,
@@ -13,9 +17,13 @@ import {
   stop,
   toast,
   writeConfig,
+  writeConfigSource,
   type ServiceName,
   type ServiceStatus,
 } from "./api"
+import { SchemaForm } from "./schemaForm"
+import { formSchema, validateConfig } from "./configSchema"
+import { applyValue } from "./yamlDoc"
 
 const LABELS: Record<ServiceName, string> = {
   hoyofall: "hoyofall",
@@ -103,16 +111,61 @@ const Dashboard = ({ onOpen }: { onOpen: (service: ServiceName) => void }) => (
   </div>
 )
 
-const useConfig = (service: ServiceName) => {
-  const [value, setValue] = useState("")
-  const [dirty, setDirty] = useState(false)
+type ConfigMode = "form" | "nushell" | "raw"
+
+const MODE_KEY = (service: ServiceName) => `hoyofall.config.mode.${service}`
+
+const readStoredMode = (service: ServiceName): ConfigMode | null => {
+  const stored = window.localStorage.getItem(MODE_KEY(service))
+  return stored === "form" || stored === "nushell" || stored === "raw"
+    ? stored
+    : null
+}
+
+const parseYaml = (text: string): unknown => {
+  try {
+    return parse(text)
+  } catch {
+    return undefined
+  }
+}
+
+const nushellPlaceholder = (service: ServiceName): string =>
+  service === "sing-box"
+    ? '{ log: { level: "info", timestamp: true }, outbounds: [ { type: "direct", tag: "direct" } ], route: { final: "direct" } }'
+    : '# The final expression is the hoyofall config record.\n{ subscriptions: { default: { name: "default", urlEnv: "HOYOFALL_SUB_URL" } } }'
+
+const ConfigEditor = ({ service }: { service: ServiceName }) => {
+  const [mode, setMode] = useState<ConfigMode>(
+    () => readStoredMode(service) ?? (service === "hoyofall" ? "form" : "raw"),
+  )
+  const [raw, setRaw] = useState("")
+  const [source, setSource] = useState("")
+  const [value, setValue] = useState<unknown>({})
+  const [preview, setPreview] = useState("")
+  const [errors, setErrors] = useState<ReadonlyArray<string>>([])
   const [loaded, setLoaded] = useState(false)
+  const [rawDirty, setRawDirty] = useState(false)
+  const [sourceDirty, setSourceDirty] = useState(false)
+  const [formDirty, setFormDirty] = useState(false)
+  const initialised = useRef(false)
 
   const load = useCallback(() => {
-    void run(readConfig(service)).then(
-      (text) => {
-        setValue(text)
-        setDirty(false)
+    void run(
+      Effect.gen(function* () {
+        const text = yield* readConfig(service)
+        const src = yield* readConfigSource(service)
+        return { text, src }
+      }),
+    ).then(
+      ({ text, src }) => {
+        setRaw(text)
+        setValue(parseYaml(text) ?? {})
+        setRawDirty(false)
+        setFormDirty(false)
+        setErrors([])
+        setSource(src)
+        setSourceDirty(false)
         setLoaded(true)
       },
       (cause: Error) => toast(`load config failed: ${cause.message}`),
@@ -123,44 +176,179 @@ const useConfig = (service: ServiceName) => {
     load()
   }, [load])
 
-  const save = useCallback(() => {
-    void run(writeConfig(service, value)).then(
+  useEffect(() => {
+    if (loaded && !initialised.current) {
+      initialised.current = true
+      if (readStoredMode(service) === null && source !== "") {
+        setMode("nushell")
+      }
+    }
+  }, [loaded, source, service])
+
+  const changeMode = useCallback(
+    (next: ConfigMode) => {
+      setMode(next)
+      window.localStorage.setItem(MODE_KEY(service), next)
+    },
+    [service],
+  )
+
+  const saveRaw = useCallback(() => {
+    void run(writeConfig(service, raw)).then(
       () => {
-        setDirty(false)
         toast("config saved")
+        load()
       },
       (cause: Error) => toast(`save failed: ${cause.message}`),
     )
-  }, [service, value])
+  }, [service, raw, load])
 
-  return { value, setValue, dirty, loaded, load, save }
-}
+  const saveForm = useCallback(() => {
+    const issues = validateConfig(value)
+    setErrors(issues)
+    if (issues.length > 0) {
+      toast("fix the highlighted errors first")
+      return
+    }
+    const text = applyValue(raw, value)
+    void run(writeConfig(service, text)).then(
+      () => {
+        toast("config saved")
+        load()
+      },
+      (cause: Error) => toast(`save failed: ${cause.message}`),
+    )
+  }, [service, raw, value, load])
 
-const ConfigEditor = ({ service }: { service: ServiceName }) => {
-  const { value, setValue, dirty, load, save } = useConfig(service)
-  const extensions = useMemo(() => (service === "sing-box" ? [json()] : [yaml()]), [service])
+  const saveSource = useCallback(() => {
+    void run(writeConfigSource(service, source)).then(
+      () => {
+        toast("rendered and saved")
+        setSourceDirty(false)
+        load()
+      },
+      (cause: Error) => toast(`render failed: ${cause.message}`),
+    )
+  }, [service, source, load])
+
+  const doPreview = useCallback(() => {
+    void run(renderConfigSource(service)).then(
+      (text) => setPreview(text),
+      (cause: Error) => {
+        setPreview("")
+        toast(`preview failed: ${cause.message}`)
+      },
+    )
+  }, [service])
+
+  const modes: ReadonlyArray<ConfigMode> =
+    service === "hoyofall" ? ["form", "nushell", "raw"] : ["nushell", "raw"]
+
   return (
     <div className="editor">
-      <CodeMirror
-        value={value}
-        height="58vh"
-        extensions={extensions}
-        onChange={(next) => {
-          setValue(next)
-        }}
-      />
-      <div className="controls">
-        <span className={dirty ? "badge starting" : "badge"}>{dirty ? "unsaved" : "saved"}</span>
-        <button type="button" onClick={save}>
-          Save
-        </button>
-        <button type="button" className="ghost" onClick={load}>
-          Reload
-        </button>
-      </div>
-      <p className="hint">
-        Applies after a restart ({LABELS[service] === "hoyofall" ? "use Restart" : "sing-box Restart"}).
-      </p>
+      <nav className="subnav">
+        {modes.map((entry) => (
+          <button
+            key={entry}
+            type="button"
+            className={mode === entry ? "active" : ""}
+            onClick={() => changeMode(entry)}
+          >
+            {entry === "form" ? "Form" : entry === "nushell" ? "Nushell" : "Raw"}
+          </button>
+        ))}
+      </nav>
+      {!loaded ? <p className="hint">loading…</p> : null}
+      {loaded && mode === "form" ? (
+        <div className="form-wrap">
+          <SchemaForm
+            schema={formSchema}
+            value={value}
+            onChange={(next) => {
+              setValue(next)
+              setFormDirty(true)
+            }}
+          />
+          {errors.length > 0 ? (
+            <ul className="errors">
+              {errors.map((message) => (
+                <li key={message}>{message}</li>
+              ))}
+            </ul>
+          ) : null}
+          <div className="controls">
+            <span className={formDirty ? "badge starting" : "badge"}>
+              {formDirty ? "unsaved" : "saved"}
+            </span>
+            <button type="button" onClick={saveForm}>
+              Save
+            </button>
+            <button type="button" className="ghost" onClick={load}>
+              Reload
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {loaded && mode === "nushell" ? (
+        <div className="editor">
+          <CodeMirror
+            value={source}
+            height="50vh"
+            placeholder={nushellPlaceholder(service)}
+            onChange={(next) => {
+              setSource(next)
+              setSourceDirty(true)
+            }}
+          />
+          <div className="controls">
+            <span className={sourceDirty ? "badge starting" : "badge"}>
+              {sourceDirty ? "unsaved" : "saved"}
+            </span>
+            <button type="button" onClick={saveSource}>
+              Render &amp; save
+            </button>
+            <button type="button" className="ghost" onClick={doPreview}>
+              Preview
+            </button>
+            <button type="button" className="ghost" onClick={load}>
+              Reload
+            </button>
+          </div>
+          {preview !== "" ? <pre className="preview">{preview}</pre> : null}
+          <p className="hint">
+            A Nushell script whose final expression is the config record. It is
+            rendered to {service === "sing-box" ? "JSON" : "YAML"}, validated,
+            then written.
+          </p>
+        </div>
+      ) : null}
+      {loaded && mode === "raw" ? (
+        <div className="editor">
+          <CodeMirror
+            value={raw}
+            height="58vh"
+            extensions={service === "sing-box" ? [json()] : [yaml()]}
+            onChange={(next) => {
+              setRaw(next)
+              setRawDirty(true)
+            }}
+          />
+          <div className="controls">
+            <span className={rawDirty ? "badge starting" : "badge"}>
+              {rawDirty ? "unsaved" : "saved"}
+            </span>
+            <button type="button" onClick={saveRaw}>
+              Save
+            </button>
+            <button type="button" className="ghost" onClick={load}>
+              Reload
+            </button>
+          </div>
+          <p className="hint">
+            Applies after a restart ({LABELS[service] === "hoyofall" ? "use Restart" : "sing-box Restart"}).
+          </p>
+        </div>
+      ) : null}
     </div>
   )
 }

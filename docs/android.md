@@ -90,9 +90,19 @@ service (hoyofall and sing-box), and is backed entirely by `control.nu`:
   `/data/adb/hoyofall/hoyofall/disabled`, `/data/adb/hoyofall/sing-box/disabled`),
   which the supervisor in `service.nu` honours, so changes take effect
   immediately without a reboot.
-- **Config** — a CodeMirror editor with YAML/JSON highlighting and a
-  saved/unsaved indicator; saving base64-encodes the text and calls
-  `control.nu set-config <service>`.
+- **Config** — three modes backed by `control.nu`:
+  - **Form** (hoyofall only): a schema-driven form generated from the same
+    Effect `Config` schema the daemon uses, with inline validation and
+    comment-preserving YAML edits.
+  - **Nushell**: edit a `config.nu` source document — a Nushell script whose
+    final expression is the config record. Saving renders it on device (to
+    YAML/JSON), validates it, then writes the live config; a render or
+    validation failure leaves the running config untouched and the source is
+    still saved. This is where functions, loops and imports make complex group
+    sets pleasant to write on a phone.
+  - **Raw**: the original CodeMirror editor with YAML/JSON highlighting.
+  All modes base64-encode the text and call `control.nu` (`set-config` for
+  Form/Raw, `set-source` for Nushell, `render-config` for the preview).
 - **Log** — a smart log view (line filter, follow/auto-scroll) reading the last
   300 lines via `control.nu log <service>`.
 
@@ -108,8 +118,13 @@ su -c '/system/bin/env LD_LIBRARY_PATH=/data/adb/modules/hoyofall/lib /data/adb/
 ```
 
 `control.nu <action> [service]` actions: `status`, `start`, `stop`, `restart`,
-`config`, `set-config` (base64 from `HOYOFALL_CONFIG_B64`), `log`; `service` is
-`hoyofall` or `sing-box` (`status` without a service lists both).
+`config`, `config-source`, `set-config` (base64 from `HOYOFALL_CONFIG_B64`),
+`render-config`, `set-source` (base64 from `HOYOFALL_CONFIG_B64`), `log`;
+`service` is `hoyofall` or `sing-box` (`status` without a service lists both).
+`set-config` and `set-source` validate a candidate config with the service's own
+checker before committing it (`hoyofall --check`; sing-box has no standalone
+checker because its config is merged with the fragment). `config.nu` runs as
+root, like everything else in the module.
 
 ## sing-box
 
@@ -183,12 +198,14 @@ allowlists exactly these files; anything else is rejected by `pnpm lint`.
 | `/data/adb/hoyofall/android.conf` | Supervisor settings: external sing-box watcher, restart policy, intervals (TOML). |
 | `/data/adb/hoyofall/hoyofall/` | hoyofall data dir. |
 | `/data/adb/hoyofall/hoyofall/config.yaml` | hoyofall configuration (seeded on first boot). |
+| `/data/adb/hoyofall/hoyofall/config.nu` | Optional Nushell source document for the WebUI's Nushell mode; rendered to `config.yaml`. |
 | `/data/adb/hoyofall/hoyofall/hoyofall.env` | Subscription tokens (`urlEnv`). |
 | `/data/adb/hoyofall/hoyofall/out/fragment.json` | Atomic aggregate fragment; also sing-box's `-C` directory. |
 | `/data/adb/hoyofall/hoyofall/disabled` | Present when hoyofall is stopped via the WebUI/`control.nu`. |
 | `/data/adb/hoyofall/hoyofall/log/hoyofall.log` | hoyofall stdout/stderr. |
 | `/data/adb/hoyofall/sing-box/` | sing-box data dir. |
 | `/data/adb/hoyofall/sing-box/config.json` | sing-box configuration (seeded). |
+| `/data/adb/hoyofall/sing-box/config.nu` | Optional Nushell source document for the WebUI's Nushell mode; rendered to `config.json`. |
 | `/data/adb/hoyofall/sing-box/cache/` | sing-box working dir (`-D`): cache and any Clash-API external UI. |
 | `/data/adb/hoyofall/sing-box/disabled` | Present when sing-box is stopped. |
 | `/data/adb/hoyofall/sing-box/log/sing-box.log` | sing-box stdout/stderr. |

@@ -5,6 +5,7 @@
 ```bash
 hoyofall --config /etc/hoyofall/config.yaml
 hoyofall --config=/etc/hoyofall/config.yaml
+hoyofall --check --config /etc/hoyofall/config.yaml   # validate and exit
 hoyofall --print-schema   # print the configuration JSON Schema
 hoyofall --help
 hoyofall --version
@@ -12,6 +13,11 @@ hoyofall --version
 
 `--config` (or `-c`) is required to run. The process stays in the foreground and
 refreshes subscriptions until it is stopped.
+
+`--check` loads and validates the configuration (schema, DAG, regexes, output)
+and exits `0`/non-zero without starting the service or resolving `urlEnv`
+secrets. The Android module uses it to validate a candidate config before it
+replaces the live one.
 
 ## HTTP endpoints
 

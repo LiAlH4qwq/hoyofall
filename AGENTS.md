@@ -18,6 +18,7 @@ effect-based formulation.
 ```bash
 pnpm install
 pnpm typecheck   # tsc --noEmit
+pnpm typecheck:webui  # tsc --noEmit for android/webui
 pnpm lint        # eslint . && tsx scripts/check-ast.ts && tsx scripts/check-shell.ts
 pnpm check:ast   # AST-level functional-rule enforcement only
 pnpm test        # vitest

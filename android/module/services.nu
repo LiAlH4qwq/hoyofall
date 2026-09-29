@@ -29,6 +29,17 @@ export def service-spec [name: string] {
         ($HOYOFALL_DIR | path join "config.yaml")
       ]
       config: ($HOYOFALL_DIR | path join "config.yaml")
+      # The Nushell source document the WebUI's "Nushell" mode edits; rendered
+      # into `config` on save (see control.nu `set-source`).
+      source: ($HOYOFALL_DIR | path join "config.nu")
+      format: "yaml"
+      # Validation command for a candidate file; the path is appended.
+      check: [
+        ($MODULE | path join "bin" "node")
+        ($MODULE | path join "index.js")
+        "--check"
+        "--config"
+      ]
       log: ($HOYOFALL_DIR | path join "log" "hoyofall.log")
       flag: ($HOYOFALL_DIR | path join "disabled")
     }
@@ -47,6 +58,11 @@ export def service-spec [name: string] {
         ($SINGBOX_DIR | path join "cache")
       ]
       config: ($SINGBOX_DIR | path join "config.json")
+      source: ($SINGBOX_DIR | path join "config.nu")
+      format: "json"
+      # No standalone checker: sing-box reads its config merged with hoyofall's
+      # fragment (`-C`), so a bare `check -c` would report missing outbounds.
+      check: []
       log: ($SINGBOX_DIR | path join "log" "sing-box.log")
       flag: ($SINGBOX_DIR | path join "disabled")
     }

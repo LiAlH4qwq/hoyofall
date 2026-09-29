@@ -8,6 +8,7 @@ the type system.
 ```bash
 pnpm install
 pnpm typecheck   # tsc --noEmit
+pnpm typecheck:webui  # tsc --noEmit for android/webui
 pnpm lint        # eslint + scripts/check-ast.ts + scripts/check-shell.ts
 pnpm check:ast   # AST-level functional-rule enforcement only
 pnpm test        # vitest

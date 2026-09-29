@@ -11,11 +11,14 @@ export const usage = `hoyofall - convert mihomo (Clash.Meta) subscriptions into 
 
 Usage:
   hoyofall --config <path>     run using the given configuration file
+  hoyofall --check --config <path>
+                               validate the configuration and exit
   hoyofall --print-schema      print the configuration JSON Schema and exit
   hoyofall --help              show this help and exit
 
 Options:
   -c, --config <path>   path to a YAML configuration file (also --config=<path>)
+      --check           validate the configuration and exit (needs --config)
       --print-schema    print the configuration JSON Schema and exit
   -h, --help            show this help and exit
   -v, --version         print the version and exit
