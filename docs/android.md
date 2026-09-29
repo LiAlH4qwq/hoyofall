@@ -10,7 +10,7 @@ unchanged on Magisk, KernelSU, SuKiSU and ReSuKiSU, which share the module forma
 mihomo subscription (HTTPS)
         │  bin/node + index.js                 WebUI (KernelSU ksu.exec)
         ▼                                            │ control.nu
-/data/adb/hoyofall/out/fragment.json   (atomic)      ▼
+/data/adb/hoyofall/hoyofall/out/fragment.json   (atomic)   ▼
         │  bin/sing-box run -c … -C out   ◄── service.nu supervisor
         ▼
    tun / mixed proxy
@@ -30,104 +30,66 @@ but its Android target produces a **JNI application**, not a shell daemon, and
 Rewriting the app around a different runtime would be a port, not a build flag.
 Porting Node (which already runs this exact bundle) is the smaller, safer change.
 
-## Subprojects
+## How it is built
 
-`android/` contains the cross-compilation subprojects, the prebuilt payload
-fetchers, the WebUI source and the module payload. They are kept self-contained
-so they can be extracted into independent projects later; the Nushell port starts
-**minimal** and is meant to grow toward a full build. The overview is in
-[`../android/README.md`](../android/README.md).
+The module is assembled entirely from **prebuilt binaries** — there is no
+cross-compilation, and no NDK or Rust toolchain is involved. `nix/android.nix`
+fetches:
 
-| Path | What |
+| Component | Source |
 |---|---|
-| [`../android/node/`](../android/node/README.md) | Cross-compile Node.js for Android. |
-| [`../android/nushell/`](../android/nushell/README.md) | Cross-compile Nushell for Android (minimal features). |
-| [`../android/singbox/`](../android/singbox/README.md) | Fetch the pinned prebuilt sing-box for Android. |
-| [`../android/webui/`](../android/webui/README.md) | TypeScript WebUI (React + Effect + CodeMirror), bundled by rolldown. |
-| [`../android/module/`](../android/module/) | Magisk payload: shims, `.nu` logic (`services.nu`), config, WebUI. |
+| Node.js (aarch64) | Termux `nodejs` package |
+| Nushell (aarch64) | Termux `nushell` package |
+| Runtime libraries + CA bundle | Termux (`libc++`, `openssl`, `c-ares`, `libicu`, `libsqlite`, `zlib`, `libffi`, `ca-certificates`) |
+| sing-box (arm64) | SagerNet Android release |
 
-The Nix flake does not build the cross toolchain: `nix/android.nix` fetches the
-Termux (Node/Nushell) and sing-box binaries as fixed-output derivations and
-assembles the module.
-
-Every pinned version lives in `android/*/versions.lock`, and every vendored patch
-is committed under `android/*/patches/` with its Termux provenance commit — no
-floating downloads.
-
-## Prerequisites
-
-- Android NDK **r28 or newer** (Node 26 needs clang ≥ 19).
-- Rust (≥ `android/nushell/versions.lock` `rust_version`) with `rustup`.
-- `pnpm`, `zip`, `curl`, `make`, `python3`, `patch`, a C toolchain.
-- `nushell` to run the build scripts (available in `nix develop .#android`).
-
-## Build
-
-```bash
-pnpm install && pnpm build             # produce dist/index.js
-
-export ANDROID_NDK_ROOT=/path/to/ndk
-nu android/build.nu --arch arm64       # node + nushell + staged module tree
-nu android/package.nu --arch arm64     # -> android/dist/hoyofall-android-arm64.zip
-```
-
-`--arch x86_64` is supported by the Node and Nushell sub-builds for emulators
-and Intel devices; sing-box is arm64-only, so x86_64 needs `--skip-singbox`.
-arm64 is the default and the tested target. `nu android/build.nu --help` lists
-`--skip-node`, `--skip-nushell`, `--skip-singbox`, `--features` and `--force`.
-
-## Build with Nix
-
-The flake assembles the flashable module from **prebuilt Termux aarch64
-binaries** (Node, Nushell and their shared libraries) and the repository's
-Nushell staging/zip logic:
+All are fixed-output derivations, so every download happens before the build and
+the build phases run offline. The flake stages the module payload, the hoyofall
+bundle and JSON Schema, the WebUI bundle and the license texts, then writes
+`result/module/` and `result/hoyofall-android-arm64.zip`:
 
 ```bash
 nix build .#hoyofall-android
 # -> result/module/ and result/hoyofall-android-arm64.zip
-
-# host toolchain + NDK for building the pinned subprojects from source
-nix develop .#android
 ```
 
-`nix/android.nix` deliberately does **not** use nixpkgs'
-`pkgsCross.aarch64-android*` sets: they are not in the binary cache and are
-broken when built from source (`compiler-rt`, then `tzdata`, …). Instead it
-fetches the Termux packages as fixed-output derivations (so all downloads happen
-before the build and the build phases run offline), extracts `bin/node`,
-`bin/nu`, the needed `*.so` libraries and the CA bundle, and calls
-`android/build.nu --stage-only` + `android/package.nu` to assemble the module.
-The `devShell` still provides the NDK so you can build the pinned sources with
-`nu android/build.nu` if you prefer.
+nixpkgs' `pkgsCross.aarch64-android*` sets are deliberately not used: they are
+uncached and broken when built from source (`compiler-rt`, `tzdata`, …).
 
-The flake enables `allowUnfree` for its own packages because the NDK in
-`devShells.android` is unfree.
+`android/` holds the module payload ([`module/`](../android/module/)), the WebUI
+source ([`webui/`](../android/webui/README.md)), and the overview in
+[`../android/README.md`](../android/README.md).
 
 ## Install
 
 1. Flash `hoyofall-android-arm64.zip` in your module manager and reboot.
-2. The default `config.yaml` ships a placeholder subscription
+2. The seeded `hoyofall.env` defines `HOYOFALL_SUB_URL` as a placeholder
    (`http://127.0.0.1:9/disabled`) so the daemon starts, writes an empty
-   fragment and does **not** restart-loop while you configure it. Point
-   `subscriptions.default` at your subscription — either a literal `url`, or
-   `urlEnv: HOYOFALL_SUB_URL` with the token in `/data/adb/hoyofall/hoyofall.env`
-   (`HOYOFALL_SUB_URL=https://…`). Edit it from the WebUI Config tab or on disk.
-3. Adjust `/data/adb/hoyofall/config.yaml` if you want different groups.
-4. Point sing-box at the fragment via `/data/adb/hoyofall/android.conf`.
+   fragment and does **not** restart-loop while you configure it. Set your
+   subscription URL in `/data/adb/hoyofall/hoyofall/hoyofall.env`
+   (`HOYOFALL_SUB_URL=https://…`); the token never lands in `config.yaml`. Edit
+   it from the WebUI Config tab or on disk.
+3. Adjust `/data/adb/hoyofall/hoyofall/config.yaml` if you want different groups.
+4. Adjust the supervisor settings in `/data/adb/hoyofall/android.conf` if needed.
 
-## WebUI (KernelSU / SuKiSU / ReSuKiSU)
+## WebUI
 
-The module ships a `webroot/` React app that the KernelSU manager shows as the
-module's UI. It talks to the system through the KernelSU WebUI API (`ksu.exec`),
-so it only works inside those managers — there is no Magisk action button. It has
-a **Dashboard**, a **Control / Config / Log** page per service (hoyofall and
-sing-box), and is backed entirely by `control.nu`:
+The module ships a `webroot/` React app that a KernelSU-family manager shows as
+the module's UI. It talks to the system through the KernelSU WebUI API
+(`ksu.exec`), so on KernelSU / SuKiSU / ReSuKiSU it opens from the module page.
+**Magisk has no built-in module WebUI**, so Magisk users are advised to install
+the standalone KernelSU WebUI implementation —
+[`KsuWebUIStandalone`](https://github.com/5ec1cff/KsuWebUIStandalone) (also
+works on APatch) — and open hoyofall from there. Either way there is no Magisk
+action button. The UI has a **Dashboard**, a **Control / Config / Log** page per
+service (hoyofall and sing-box), and is backed entirely by `control.nu`:
 
 - **Dashboard** — live status and Start/Stop/Restart for each service.
 - **Control** — per-service status (enabled/running/supervisor) and actions.
   Start/stop writes/removes the service's `disabled` flag (e.g.
-  `/data/adb/hoyofall/disabled`), which the supervisor in `service.nu` honours, so
-  changes take effect immediately without a reboot.
+  `/data/adb/hoyofall/hoyofall/disabled`, `/data/adb/hoyofall/sing-box/disabled`),
+  which the supervisor in `service.nu` honours, so changes take effect
+  immediately without a reboot.
 - **Config** — a CodeMirror editor with YAML/JSON highlighting and a
   saved/unsaved indicator; saving base64-encodes the text and calls
   `control.nu set-config <service>`.
@@ -152,17 +114,19 @@ su -c '/system/bin/env LD_LIBRARY_PATH=/data/adb/modules/hoyofall/lib /data/adb/
 ## sing-box
 
 sing-box is bundled (`bin/sing-box`, upstream **Android arm64** build) and
-supervised like hoyofall. Its config is
-`/data/adb/hoyofall/singbox/config.json` (seeded with a safe default: a
-`127.0.0.1:7890` mixed inbound and a `direct` outbound) and its log is
-`/data/adb/hoyofall/singbox/sing-box.log`. Start/stop/restart/edit/view it from
-the WebUI **sing-box** tab.
+supervised like hoyofall. Its data dir is `/data/adb/hoyofall/sing-box/`: the
+config is `config.json` (seeded with a safe default: a `127.0.0.1:7890` mixed
+inbound and a `direct` outbound), the log is `log/sing-box.log`, and `cache/` is
+its working directory (`-D`) — sing-box's cache, and any Clash-API external UI
+it downloads, land there. Start/stop/restart/edit/view it from the WebUI
+**sing-box** tab.
 
-The supervisor runs `sing-box run -c config.json -C /data/adb/hoyofall/out`, so
-hoyofall's fragment directory is merged in automatically; set `route.final` (and
-inbounds) in `config.json` to route through a hoyofall group. Because sing-box
-reads its config once at start, the module **restarts it whenever hoyofall writes
-a new fragment** (set `restart_singbox_on_change = false` in
+The supervisor runs
+`sing-box run -c …/sing-box/config.json -C /data/adb/hoyofall/hoyofall/out -D /data/adb/hoyofall/sing-box/cache`,
+so hoyofall's fragment directory is merged in automatically; set `route.final`
+(and inbounds) in `config.json` to route through a hoyofall group. Because
+sing-box reads its config once at start, the module **restarts it whenever
+hoyofall writes a new fragment** (set `restart_singbox_on_change = false` in
 `/data/adb/hoyofall/android.conf` to opt out), or enable the external watcher
 below to feed a separate sing-box module instead.
 
@@ -180,8 +144,8 @@ watch_interval_seconds = 5
 ```
 
 `singbox_dir = ""` disables injection; hoyofall still writes
-`/data/adb/hoyofall/out/fragment.json`. The watcher is idempotent: it hashes the
-fragment and only acts on change.
+`/data/adb/hoyofall/hoyofall/out/fragment.json`. The watcher is idempotent: it
+hashes the fragment and only acts on change.
 
 ## Shims
 
@@ -214,16 +178,20 @@ allowlists exactly these files; anything else is rejected by `pnpm lint`.
 
 | Path | Contents |
 |---|---|
-| `/data/adb/modules/hoyofall/` | Code: shims, `.nu` (`services.nu`, `control.nu`, …), `bin/node`, `bin/nu`, `bin/sing-box`, `index.js`, `lib/`, `webroot/`. |
-| `/data/adb/hoyofall/config.yaml` | hoyofall configuration (seeded on first boot). |
-| `/data/adb/hoyofall/hoyofall.env` | Subscription tokens (`urlEnv`). |
-| `/data/adb/hoyofall/android.conf` | external sing-box watcher settings (TOML). |
-| `/data/adb/hoyofall/out/fragment.json` | Atomic aggregate fragment; also sing-box's `-C` directory. |
-| `/data/adb/hoyofall/disabled` | Present when hoyofall is stopped via the WebUI/`control.nu`. |
-| `/data/adb/hoyofall/log/hoyofall.log` | hoyofall stdout/stderr. |
-| `/data/adb/hoyofall/singbox/config.json` | sing-box configuration (seeded). |
-| `/data/adb/hoyofall/singbox/disabled` | Present when sing-box is stopped. |
-| `/data/adb/hoyofall/singbox/sing-box.log` | sing-box stdout/stderr. |
+| `/data/adb/modules/hoyofall/` | Code only: shims, `.nu` (`services.nu`, `control.nu`, …), `bin/node`, `bin/nu`, `bin/sing-box`, `index.js`, `schema.json`, `lib/`, `webroot/`, seed `config/`. |
+| `/data/adb/hoyofall/` | Global data dir. The supervisor settings `android.conf` live here; each app owns a subdir. |
+| `/data/adb/hoyofall/android.conf` | Supervisor settings: external sing-box watcher, restart policy, intervals (TOML). |
+| `/data/adb/hoyofall/hoyofall/` | hoyofall data dir. |
+| `/data/adb/hoyofall/hoyofall/config.yaml` | hoyofall configuration (seeded on first boot). |
+| `/data/adb/hoyofall/hoyofall/hoyofall.env` | Subscription tokens (`urlEnv`). |
+| `/data/adb/hoyofall/hoyofall/out/fragment.json` | Atomic aggregate fragment; also sing-box's `-C` directory. |
+| `/data/adb/hoyofall/hoyofall/disabled` | Present when hoyofall is stopped via the WebUI/`control.nu`. |
+| `/data/adb/hoyofall/hoyofall/log/hoyofall.log` | hoyofall stdout/stderr. |
+| `/data/adb/hoyofall/sing-box/` | sing-box data dir. |
+| `/data/adb/hoyofall/sing-box/config.json` | sing-box configuration (seeded). |
+| `/data/adb/hoyofall/sing-box/cache/` | sing-box working dir (`-D`): cache and any Clash-API external UI. |
+| `/data/adb/hoyofall/sing-box/disabled` | Present when sing-box is stopped. |
+| `/data/adb/hoyofall/sing-box/log/sing-box.log` | sing-box stdout/stderr. |
 
 ## Security notes
 
@@ -242,40 +210,22 @@ allowlists exactly these files; anything else is rejected by `pnpm lint`.
 
 ## Updating pins
 
-There are two build paths; update the pins for whichever you use.
+`nix build .#hoyofall-android` pins prebuilt binaries in `nix/android.nix`: the
+Termux packages (`nodejsDeb`, `nushellDeb`, the runtime libraries, and the CA
+bundle) and `singbox` (the upstream SagerNet Android release).
 
-The **Nix-built module** (`nix build .#hoyofall-android`) pins prebuilt binaries in
-`nix/android.nix`: the Termux packages (`nodejsDeb`, `nushellDeb`, the runtime
-libraries, and the CA bundle) and `singbox` (the upstream SagerNet Android
-release). To refresh Termux: look up the current `Version`, `Filename` and
-`SHA256` in the Termux `stable` aarch64 index
+To refresh Termux: look up the current `Version`, `Filename` and `SHA256` in the
+Termux `stable` aarch64 index
 (`https://packages.termux.dev/apt/termux-main/dists/stable/main/binary-aarch64/Packages.gz`),
 convert the hex SHA to SRI (`nix hash to-sri --type sha256 <hex>`), and update the
 `deb` calls; if a package's `Depends` line changes, adjust the `needed` library
-list. To refresh sing-box: bump `sing-box` in `nix/android.nix` and
-`android/singbox/versions.lock` together.
-
-The **source-built subprojects** (`nu android/build.nu`) pin their own inputs:
-
-- **Node**: bump `node_version`, `node_tarball`, `node_url` and `node_sha256` in
-  `android/node/versions.lock` (the checksum is in
-  `nodejs.org/dist/v<version>/SHASUMS256.txt`), then re-vendor
-  `android/node/patches/termux/` from the matching Termux `nodejs` revision and
-  update `patches_commit`.
-- **Nushell**: bump the version, URL and SHA-256 in
-  `android/nushell/versions.lock`, re-vendor `patches/termux/`, and update
-  `patches_commit`. Add Cargo features with `--features` if a `.nu` script needs
-  more than the minimal set.
-- **sing-box**: bump `singbox_version`, `singbox_url` and `singbox_sha256` in
-  `android/singbox/versions.lock` (`fetch.nu` downloads and verifies it).
-- **NDK**: no download is pinned; the scripts validate `source.properties` and
-  the documented minimum revision.
+list. To refresh sing-box: bump `singbox` in `nix/android.nix`.
 
 ## Troubleshooting
 
-- **`node` exits immediately**: check `/data/adb/hoyofall/log/hoyofall.log`; a
-  missing `LD_LIBRARY_PATH` (staged `lib/`) or an unset `urlEnv` variable both
-  show up there.
+- **`node` exits immediately**: check
+  `/data/adb/hoyofall/hoyofall/log/hoyofall.log`; a missing `LD_LIBRARY_PATH`
+  (staged `lib/`) or an unset `urlEnv` variable both show up there.
 - **Fragment never appears**: confirm at least one subscription succeeded; a
   failed refresh is logged and retried on the next interval.
 - **sing-box never reloads**: verify `singbox_dir` and `singbox_reload` in

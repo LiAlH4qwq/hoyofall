@@ -38,11 +38,12 @@ hoyofall 是一个小巧的无头后台服务：按各自独立的间隔抓取�
     settings = {
       subscriptions.default = { urlEnv = "SUB_URL"; };
       groups.custom = {
-        "hk-auto" = { type = "urltest"; includeRegexes = [ "HK" ]; };
+        "hk-auto" = { level = 1; type = "urltest"; includeRegexes = [ "HK" ]; };
         default = {
+          level = 2;
           type = "selector";
           includeProxies = false;
-          includeCustomGroups = true;
+          includeLevels = [ 1 ];
           includeDirect = true;
         };
       };
@@ -98,17 +99,18 @@ hoyofall --help
 
 hoyofall 以一体化可刷入模块发布：把同一份 `dist/index.js` 跑在预编译的 Android
 Node 上，由 Nushell 守护，**并附带受守护的 sing-box** 与 KernelSU **WebUI**
-（仪表盘、启动/停止、配置编辑、日志）：
+（仪表盘、启动/停止、配置编辑、日志）。Nix 从预编译的 Termux aarch64 二进制与
+上游 sing-box 构建组装（全部为固定输出下载）：
 
 ```bash
-nu android/build.nu --arch arm64      # node + nushell + sing-box，暂存模块树
-nu android/package.nu --arch arm64    # -> hoyofall-android-arm64.zip
-# 或使用 Nix 提供的预编译二进制：
-nix build .#hoyofall-android
+nix build .#hoyofall-android          # -> result/hoyofall-android-arm64.zip
 ```
 
 用 Magisk/KernelSU 刷入该 zip；默认配置无需 token 即可启动。
-从 WebUI 或 `/data/adb/hoyofall/` 配置订阅与 sing-box。
+从 WebUI 配置订阅与 sing-box——KernelSU/SuKiSU/ReSuKiSU 自带；Magisk 上建议使用
+独立的 [`KsuWebUIStandalone`](https://github.com/5ec1cff/KsuWebUIStandalone) 应用
+——或直接编辑 `/data/adb/hoyofall/`
+（各应用各有子目录：`hoyofall/` 与 `sing-box/`）。
 完整指南见 [docs/android.md](./docs/android.md)；拆分为独立模块的计划见
 [docs/android-future.md](./docs/android-future.md)（英文）。
 
@@ -120,7 +122,7 @@ nix build .#hoyofall-android
 | [Usage](./docs/usage.md) | CLI、HTTP 端点、导入 sing-box。 |
 | [Nix](./docs/nix.md) | flake 输出与 NixOS 模块。 |
 | [systemd](./docs/systemd.md) | 不使用 Nix 的运行方式。 |
-| [Android](./docs/android.md) | Magisk/KernelSU 模块、Node + Nushell 交叉编译。 |
+| [Android](./docs/android.md) | Magisk/KernelSU 模块（预编译 Node、Nushell 与 sing-box）。 |
 | [Design](./docs/design.md) | 函数式保证及其强制方式。 |
 | [Development](./docs/development.md) | 构建、测试与 AST 规则。 |
 

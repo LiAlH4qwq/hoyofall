@@ -44,11 +44,12 @@ into a base config.
     settings = {
       subscriptions.default = { urlEnv = "SUB_URL"; };
       groups.custom = {
-        "hk-auto" = { type = "urltest"; includeRegexes = [ "HK" ]; };
+        "hk-auto" = { level = 1; type = "urltest"; includeRegexes = [ "HK" ]; };
         default = {
+          level = 2;
           type = "selector";
           includeProxies = false;
-          includeCustomGroups = true;
+          includeLevels = [ 1 ];
           includeDirect = true;
         };
       };
@@ -106,17 +107,20 @@ hoyofall --help
 
 hoyofall ships as an all-in-one flashable module: the same `dist/index.js` on a
 prebuilt Android Node, supervised by Nushell, **plus a supervised sing-box** and
-a KernelSU **WebUI** (dashboard, start/stop, config editor, logs):
+a KernelSU **WebUI** (dashboard, start/stop, config editor, logs). Nix assembles
+it from prebuilt Termux aarch64 binaries and the upstream sing-box build (all
+fixed-output downloads):
 
 ```bash
-nu android/build.nu --arch arm64      # node + nushell + sing-box, stage module
-nu android/package.nu --arch arm64    # -> hoyofall-android-arm64.zip
-# or, using prebuilt binaries via Nix:
-nix build .#hoyofall-android
+nix build .#hoyofall-android          # -> result/hoyofall-android-arm64.zip
 ```
 
 Flash the zip with Magisk/KernelSU; the default config starts without a token.
-Configure subscriptions and sing-box from the WebUI or under `/data/adb/hoyofall/`.
+Configure subscriptions and sing-box from the WebUI — native on
+KernelSU/SuKiSU/ReSuKiSU, or via the standalone
+[`KsuWebUIStandalone`](https://github.com/5ec1cff/KsuWebUIStandalone) app on
+Magisk — or under `/data/adb/hoyofall/` (each app has its own subdir: `hoyofall/`
+and `sing-box/`).
 Full guide: [docs/android.md](./docs/android.md); the planned split into separate
 modules is in [docs/android-future.md](./docs/android-future.md).
 
@@ -128,7 +132,7 @@ modules is in [docs/android-future.md](./docs/android-future.md).
 | [Usage](./docs/usage.md) | CLI, HTTP endpoints, importing into sing-box. |
 | [Nix](./docs/nix.md) | Flake outputs and the NixOS module. |
 | [systemd](./docs/systemd.md) | Running without Nix. |
-| [Android](./docs/android.md) | Magisk/KernelSU module, Node + Nushell cross-compilation. |
+| [Android](./docs/android.md) | Magisk/KernelSU module (prebuilt Node, Nushell and sing-box). |
 | [Design](./docs/design.md) | Functional guarantees and how they are enforced. |
 | [Development](./docs/development.md) | Build, test, and the AST rules. |
 

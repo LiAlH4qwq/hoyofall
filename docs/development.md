@@ -16,11 +16,10 @@ pnpm build       # rolldown bundle + JSON schema
 pnpm dev --config config.yaml
 ```
 
-Android cross-compilation is driven by Nushell, not bash:
+The Android module is assembled from prebuilt binaries by Nix, not cross-compiled:
 
 ```bash
-nu android/build.nu --arch arm64      # node + nushell + module payload
-nu android/package.nu --arch arm64    # hoyofall-android-arm64.zip
+nix build .#hoyofall-android   # result/hoyofall-android-arm64.zip
 ```
 
 ## Layout
@@ -35,10 +34,8 @@ nu android/package.nu --arch arm64    # hoyofall-android-arm64.zip
 - `src/diagnostics.ts` – CLI usage and friendly error formatting
 - `scripts/check-ast.ts` – AST enforcement of the functional rules
 - `scripts/check-shell.ts` – bans authored bash / POSIX shell scripts
-- `android/node/` – cross-compiles Node for Android; `android/nushell/` –
-  cross-compiles Nushell; `android/singbox/` – fetches prebuilt sing-box;
-  `android/webui/` – KernelSU WebUI source; `android/module/` – Magisk/KernelSU
-  payload
+- `android/webui/` – KernelSU WebUI source; `android/module/` – Magisk/KernelSU
+  payload (assembled into the flashable module by `nix/android.nix`)
 - `nix/` – `package.nix`, `overlay.nix`, `android.nix`, NixOS `module.nix`;
   `flake.nix`
 

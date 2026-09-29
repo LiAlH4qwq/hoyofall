@@ -33,4 +33,4 @@ restart_delay_seconds = 5
 
 # Where hoyofall writes the aggregate fragment. Must match
 # output.file.path in config.yaml.
-# out_file = "/data/adb/hoyofall/out/fragment.json"
+# out_file = "/data/adb/hoyofall/hoyofall/out/fragment.json"

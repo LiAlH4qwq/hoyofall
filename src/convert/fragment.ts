@@ -5,12 +5,14 @@ import {
   DuplicateTagError,
   EmptyCustomGroupError,
   EmptyCustomGroupsError,
+  GroupCycleError,
   MissingReferenceError,
   StrictConversionError,
   type ConversionWarning,
 } from "../errors"
 import type { DecodedSubscription } from "../mihomo/decode"
 import type { Fragment, Outbound } from "../singbox/schema"
+import { findGroupCycle } from "./dag"
 import { convertCustomGroup, convertGroup } from "./group"
 import { convertProxy } from "./proxy"
 
@@ -60,7 +62,7 @@ const matchesAny = (
   value: string,
 ): boolean => patterns.some((pattern) => new RegExp(pattern).test(value))
 
-const dedupe = (values: ReadonlyArray<string>): ReadonlyArray<string> =>
+const dedupe = <A>(values: ReadonlyArray<A>): ReadonlyArray<A> =>
   values.filter((value, index) => values.indexOf(value) === index)
 
 const builtinOutbounds = (): ReadonlyArray<Outbound> => [
@@ -96,11 +98,21 @@ const selectCandidates = (
 const tagsOf = (candidates: ReadonlyArray<Candidate>): ReadonlyArray<string> =>
   candidates.map((candidate) => candidate.tag)
 
+interface LeveledCandidate {
+  readonly candidate: Candidate
+  readonly level: number
+}
+
+// Explicit `members` are exact references and bypass *every*
+// `include*Regexes` / `exclude*Regexes` filter (`includeSubRegexes`,
+// `excludeSubRegexes`, `includeRegexes`, `excludeRegexes`). Only the regex-based
+// pools honour those; a member is included iff its exact identity matches.
 const resolveMemberTags = (
   member: MemberRef,
   proxyCandidates: ReadonlyArray<Candidate>,
   nativeCandidates: ReadonlyArray<Candidate>,
-  customCandidates: ReadonlyArray<Candidate>,
+  sameScopeCustoms: ReadonlyArray<LeveledCandidate>,
+  subscriptionCustoms: ReadonlyArray<Candidate>,
 ): ReadonlyArray<string> => {
   switch (member.type) {
     case "proxy":
@@ -120,9 +132,19 @@ const resolveMemberTags = (
         ),
       )
     case "customGroup":
-      return tagsOf(
-        customCandidates.filter((candidate) => candidate.name === member.name),
-      )
+      return member.subscription === undefined
+        ? tagsOf(
+            sameScopeCustoms.flatMap((item) =>
+              item.candidate.name === member.name ? [item.candidate] : [],
+            ),
+          )
+        : tagsOf(
+            subscriptionCustoms.filter(
+              (candidate) =>
+                candidate.subscription === member.subscription &&
+                candidate.name === member.name,
+            ),
+          )
   }
 }
 
@@ -133,7 +155,9 @@ const describeMember = (member: MemberRef): string => {
     case "nativeGroup":
       return `nativeGroup ${member.subscription}/${member.name}`
     case "customGroup":
-      return `customGroup ${member.name}`
+      return member.subscription === undefined
+        ? `customGroup ${member.name}`
+        : `customGroup ${member.subscription}/${member.name}`
   }
 }
 
@@ -166,7 +190,8 @@ interface BuildCustomGroupArgs {
   readonly group: CustomGroup
   readonly proxyCandidates: ReadonlyArray<Candidate>
   readonly nativeCandidates: ReadonlyArray<Candidate>
-  readonly customCandidates: ReadonlyArray<Candidate>
+  readonly sameScopeCustoms: ReadonlyArray<LeveledCandidate>
+  readonly subscriptionCustoms: ReadonlyArray<Candidate>
 }
 
 interface BuiltCustomGroup {
@@ -193,10 +218,11 @@ const buildCustomGroup = (args: BuildCustomGroupArgs): BuiltCustomGroup => {
         group.excludeSubRegexes,
       )
     : []
-  const selflessCustomCandidates = args.customCandidates.filter(
-    (candidate) => candidate.name !== args.id,
+  // Same-scope custom groups at the requested levels (always strictly lower
+  // than this group's level, so they are already built).
+  const levelPool = args.sameScopeCustoms.filter((item) =>
+    group.includeLevels.includes(item.level),
   )
-  const customPool = group.includeCustomGroups ? selflessCustomCandidates : []
 
   const proxySelected = selectCandidates(
     proxyPool,
@@ -209,30 +235,19 @@ const buildCustomGroup = (args: BuildCustomGroupArgs): BuiltCustomGroup => {
     group.excludeRegexes,
   )
   const customSelected = selectCandidates(
-    customPool,
+    levelPool.map((item) => item.candidate),
     group.includeRegexes,
     group.excludeRegexes,
   )
 
-  // Typed `proxy` / `nativeGroup` members are subscription-derived, so they are
-  // scoped by `includeSubRegexes` / `excludeSubRegexes` like the pools above.
-  const memberProxyCandidates = filterBySubscription(
-    args.proxyCandidates,
-    group.includeSubRegexes,
-    group.excludeSubRegexes,
-  )
-  const memberNativeCandidates = filterBySubscription(
-    args.nativeCandidates,
-    group.includeSubRegexes,
-    group.excludeSubRegexes,
-  )
   const memberResolutions = group.members.map((member) => ({
     member,
     tags: resolveMemberTags(
       member,
-      memberProxyCandidates,
-      memberNativeCandidates,
-      selflessCustomCandidates,
+      args.proxyCandidates,
+      args.nativeCandidates,
+      args.sameScopeCustoms,
+      args.subscriptionCustoms,
     ),
   }))
 
@@ -310,7 +325,7 @@ const buildCustomGroup = (args: BuildCustomGroupArgs): BuiltCustomGroup => {
   }
 
   const samples = dedupe(
-    [...proxyPool, ...nativePool, ...customPool].map(
+    [...proxyPool, ...nativePool, ...levelPool.map((item) => item.candidate)].map(
       (candidate) => candidate.name,
     ),
   ).slice(0, 5)
@@ -330,20 +345,16 @@ const buildCustomGroup = (args: BuildCustomGroupArgs): BuiltCustomGroup => {
 interface GroupPass {
   readonly outbounds: ReadonlyArray<Outbound>
   readonly entries: ReadonlyArray<Candidate>
-  readonly emittedIds: ReadonlySet<string>
   readonly warnings: ReadonlyArray<ConversionWarning>
   readonly errors: ReadonlyArray<EmptyCustomGroupError>
 }
 
-const setsEqual = (
-  left: ReadonlySet<string>,
-  right: ReadonlySet<string>,
-): boolean =>
-  left.size === right.size && [...left].every((value) => right.has(value))
+interface ScopePass extends GroupPass {
+  readonly leveled: ReadonlyArray<LeveledCandidate>
+}
 
-// Custom groups may reference each other (`includeCustomGroups` / typed
-// `customGroup` members). Resolve to a fixpoint so the result does not depend on
-// definition order (Nix attribute sets are sorted alphabetically).
+// Custom groups reference each other only through strictly lower `level`s, so
+// building in ascending level order needs no fixpoint and cannot form a cycle.
 const buildGroups = (
   entries: ReadonlyArray<readonly [string, CustomGroup]>,
   scope: string,
@@ -351,24 +362,21 @@ const buildGroups = (
   makeTag: (id: string) => string,
   proxyCandidates: ReadonlyArray<Candidate>,
   nativeCandidates: ReadonlyArray<Candidate>,
-  externalCustomCandidates: ReadonlyArray<Candidate>,
+  subscriptionCustoms: ReadonlyArray<Candidate>,
 ): GroupPass => {
-  const buildOnce = (availableIds: ReadonlySet<string>): GroupPass => {
-    const customCandidates: ReadonlyArray<Candidate> = [
-      ...externalCustomCandidates,
-      ...entries.flatMap(([id]) =>
-        availableIds.has(id)
-          ? [
-              {
-                subscription: candidateSubscription,
-                name: id,
-                tag: makeTag(id),
-              },
-            ]
-          : [],
-      ),
-    ]
-    const results = entries.map(([id, group]) => ({
+  const levels = dedupe(entries.map(([, group]) => group.level)).toSorted(
+    (left, right) => left - right,
+  )
+  const initial: ScopePass = {
+    outbounds: [],
+    entries: [],
+    warnings: [],
+    errors: [],
+    leveled: [],
+  }
+  const built = levels.reduce<ScopePass>((acc, level) => {
+    const atLevel = entries.filter(([, group]) => group.level === level)
+    const results = atLevel.map(([id, group]) => ({
       id,
       built: buildCustomGroup({
         scope,
@@ -377,52 +385,55 @@ const buildGroups = (
         group,
         proxyCandidates,
         nativeCandidates,
-        customCandidates,
+        sameScopeCustoms: acc.leveled,
+        subscriptionCustoms,
       }),
     }))
-    return {
-      outbounds: results.flatMap((result) =>
-        result.built.outbound === undefined ? [] : [result.built.outbound],
-      ),
-      entries: results.flatMap((result) =>
-        result.built.entry === undefined
-          ? []
-          : [
-              {
+    const emitted: ReadonlyArray<LeveledCandidate> = results.flatMap((result) =>
+      result.built.entry === undefined
+        ? []
+        : [
+            {
+              candidate: {
                 subscription: candidateSubscription,
                 name: result.id,
                 tag: makeTag(result.id),
               },
-            ],
-      ),
-      emittedIds: new Set(
-        results.flatMap((result) =>
-          result.built.entry === undefined ? [] : [result.id],
+              level,
+            },
+          ],
+    )
+    return {
+      outbounds: [
+        ...acc.outbounds,
+        ...results.flatMap((result) =>
+          result.built.outbound === undefined ? [] : [result.built.outbound],
         ),
-      ),
-      warnings: results.flatMap((result) => result.built.warnings),
-      errors: results.flatMap((result) =>
-        result.built.error === undefined ? [] : [result.built.error],
-      ),
+      ],
+      entries: acc.entries,
+      warnings: [...acc.warnings, ...results.flatMap((result) => result.built.warnings)],
+      errors: [
+        ...acc.errors,
+        ...results.flatMap((result) =>
+          result.built.error === undefined ? [] : [result.built.error],
+        ),
+      ],
+      leveled: [...acc.leveled, ...emitted],
     }
+  }, initial)
+  return {
+    outbounds: built.outbounds,
+    entries: built.leveled.map((item) => item.candidate),
+    warnings: built.warnings,
+    errors: built.errors,
   }
-  const iterate = (
-    availableIds: ReadonlySet<string>,
-    remaining: number,
-  ): GroupPass => {
-    const pass = buildOnce(availableIds)
-    return remaining <= 0 || setsEqual(pass.emittedIds, availableIds)
-      ? pass
-      : iterate(pass.emittedIds, remaining - 1)
-  }
-  return iterate(new Set<string>(), entries.length + 1)
 }
 
 export const convertSubscription = (
   subscription: ResolvedSubscription,
   decoded: DecodedSubscription,
   options: ConvertOptions,
-): Effect.Effect<SubscriptionFragment, StrictConversionError> => {
+): Effect.Effect<SubscriptionFragment, StrictConversionError | GroupCycleError> => {
   const native = subscription.groups.native
 
   const isExcluded = (name: string): boolean =>
@@ -554,10 +565,33 @@ export const convertSubscription = (
     ...built.warnings,
   ]
 
-  if (
-    built.errors.length > 0 ||
-    (subscription.onUnsupported === "fail" && warnings.length > 0)
-  ) {
+  const outbounds: ReadonlyArray<Outbound> = [
+    ...proxyOutbounds,
+    ...nativeOutbounds,
+    ...built.outbounds,
+  ]
+
+  if (built.errors.length > 0) {
+    return Effect.fail(
+      new StrictConversionError({
+        subscription: subscription.id,
+        issues: warnings.map(warningMessage),
+      }),
+    )
+  }
+
+  // sing-box needs a DAG: a cycle anywhere in this subscription is fatal.
+  const cycle = findGroupCycle(outbounds)
+  if (cycle !== undefined) {
+    return Effect.fail(
+      new GroupCycleError({
+        scope: `subscriptions.${subscription.id}`,
+        groups: cycle,
+      }),
+    )
+  }
+
+  if (subscription.onUnsupported === "fail" && warnings.length > 0) {
     return Effect.fail(
       new StrictConversionError({
         subscription: subscription.id,
@@ -569,9 +603,7 @@ export const convertSubscription = (
   return Effect.succeed({
     subscriptionId: subscription.id,
     subscriptionName: subscription.name,
-    fragment: {
-      outbounds: [...proxyOutbounds, ...nativeOutbounds, ...built.outbounds],
-    },
+    fragment: { outbounds },
     warnings,
     proxies,
     nativeGroups: nativeKept,
@@ -582,7 +614,10 @@ export const convertSubscription = (
 export const assembleFragment = (
   config: ResolvedConfig,
   fragments: ReadonlyArray<SubscriptionFragment>,
-): Effect.Effect<AssembledFragment, DuplicateTagError | EmptyCustomGroupsError> => {
+): Effect.Effect<
+  AssembledFragment,
+  DuplicateTagError | EmptyCustomGroupsError | GroupCycleError
+> => {
   const proxyCandidates: ReadonlyArray<Candidate> = fragments.flatMap(
     (fragment) =>
       fragment.proxies.map((entry) => ({
@@ -663,6 +698,13 @@ export const assembleFragment = (
   if (built.errors.length > 0) {
     return Effect.fail(new EmptyCustomGroupsError({ groups: built.errors }))
   }
+
+  // The assembled fragment is what sing-box consumes; it must be a DAG.
+  const cycle = findGroupCycle(outbounds)
+  if (cycle !== undefined) {
+    return Effect.fail(new GroupCycleError({ scope: "groups", groups: cycle }))
+  }
+
   if (duplicates.length > 0) {
     return Effect.fail(new DuplicateTagError({ tags: duplicates }))
   }

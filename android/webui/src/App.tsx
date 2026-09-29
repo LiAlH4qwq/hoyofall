@@ -240,7 +240,7 @@ const ServicePanel = ({ service }: { service: ServiceName }) => {
         <div className="card">
           <Controls service={service} />
           <p className="hint">
-            Config: <code>{service === "sing-box" ? "singbox/config.json" : "config.yaml"}</code>
+            Config: <code>{service === "sing-box" ? "sing-box/config.json" : "hoyofall/config.yaml"}</code>
           </p>
         </div>
       )}

@@ -11,8 +11,8 @@ use ./services.nu *
 
 # Poll the aggregate fragment and, on change, copy it into an *external*
 # sing-box module's config directory and run the configured reload hook.
-# (The bundled sing-box reads /data/adb/hoyofall/out via `-C`; this is for users
-# who run a separate sing-box module.)
+# (The bundled sing-box reads /data/adb/hoyofall/hoyofall/out via `-C`; this is
+# for users who run a separate sing-box module.)
 def watch-loop [
   outFile: path
   targetDir: string
@@ -53,6 +53,14 @@ def read-dotenv [path: path] {
   | each {|pair| { key: $pair.key, value: $pair.value } }
 }
 
+# Tokens live in `<HOYOFALL_DIR>/hoyofall.env`, never in config.yaml. Reloading
+# before each spawn means editing the file and restarting the service (via the
+# WebUI / control.nu) takes effect without rebooting the module.
+def load-token-env [] {
+  let dotenv = (read-dotenv ($HOYOFALL_DIR | path join "hoyofall.env"))
+  load-env ($dotenv | reduce --fold {} {|pair, acc| $acc | insert $pair.key $pair.value })
+}
+
 # When hoyofall writes a new fragment, restart a service so it reloads it.
 # Optional (see `restart_singbox_on_change`); the supervisor brings the service
 # back. `previous` is seeded from the current fragment so a restart is not
@@ -88,6 +96,7 @@ def supervise [name: string, delay: int] {
     # Nushell raises on a non-zero external exit; catch it so the supervisor is
     # not taken down with the service.
     try {
+      load-token-env
       ^$spec.bin ...$spec.args o+e>| save --append $spec.log
     } catch {|error| print -e $"[hoyofall] ($name) error: ($error.msg)" }
     let code = ($env.LAST_EXIT_CODE? | default 0)
@@ -97,8 +106,7 @@ def supervise [name: string, delay: int] {
 }
 
 def main [] {
-  let config = ($DATA | path join "config.yaml")
-  let envPath = ($DATA | path join "hoyofall.env")
+  let config = ($HOYOFALL_DIR | path join "config.yaml")
   let confPath = ($DATA | path join "android.conf")
   let index = ($MODULE | path join "index.js")
   let node = ($MODULE | path join "bin" "node")
@@ -110,18 +118,25 @@ def main [] {
     error make { msg: $"($index) is missing; reinstall the module" }
   }
 
-  [ "out" "log" "singbox" ] | each {|dir| mkdir ($DATA | path join $dir) }
+  # The global data dir holds the supervisor config; each app owns a subdir.
+  [
+    $HOYOFALL_DIR
+    ($HOYOFALL_DIR | path join "out")
+    ($HOYOFALL_DIR | path join "log")
+    $SINGBOX_DIR
+    ($SINGBOX_DIR | path join "cache")
+    ($SINGBOX_DIR | path join "log")
+  ] | each {|dir| mkdir $dir }
   if not ($config | path exists) {
     cp ($MODULE | path join "config" "config.android.yaml") $config
     print -e $"[hoyofall] seeded default config at ($config)"
   }
 
-  # Subscription tokens live in the dotenv file, never in config.yaml.
-  let dotenv = (read-dotenv $envPath)
-  load-env ($dotenv | reduce --fold {} {|pair, acc| $acc | insert $pair.key $pair.value })
+  # Subscription tokens live in hoyofall.env, never in config.yaml.
+  load-token-env
 
   let conf = (if ($confPath | path exists) { open $confPath --raw | from toml } else { {} })
-  let outFile = ($conf | get --optional out_file | default ($DATA | path join "out" "fragment.json"))
+  let outFile = ($conf | get --optional out_file | default ($HOYOFALL_DIR | path join "out" "fragment.json"))
   let watch = ($conf | get --optional watch_singbox | default true)
   let targetDir = ($conf | get --optional singbox_dir | default "")
   let targetName = ($conf | get --optional singbox_target | default "hoyofall.json")

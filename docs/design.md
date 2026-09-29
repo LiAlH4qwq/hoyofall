@@ -31,6 +31,10 @@ Unsupported proxy or group types are not exceptions: they are collected as
 `onUnsupported: skip | fail`. A single failing subscription does not take down
 the others.
 
+The outbound graph must be a DAG: custom groups may only reference groups of a
+strictly lower `level`, invalid references and level violations fail at config
+validation, and a cycle that reaches conversion is a typed `GroupCycleError`.
+
 ## Sessions, not cells
 
 State is functional: a subscription's latest conversion is carried in a

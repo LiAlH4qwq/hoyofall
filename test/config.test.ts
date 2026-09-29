@@ -85,11 +85,105 @@ subscriptions:
     groups:
       custom:
         x:
+          level: 1
           includeSubRegexes: ["^a$"]
 `
     const config = Effect.runSync(decodeConfig(parse(yaml), "test.yaml"))
     const exit = Effect.runSyncExit(validateConfig(config))
     expect(exit._tag).toBe("Failure")
+  })
+
+  it("requires a level on every custom group", () => {
+    const yaml = `
+subscriptions:
+  airport:
+    url: https://example.com/sub
+output:
+  file: { enabled: true }
+groups:
+  custom:
+    g:
+      includeProxies: true
+`
+    expect(Effect.runSyncExit(decodeConfig(parse(yaml), "test.yaml"))._tag).toBe(
+      "Failure",
+    )
+  })
+
+  const groupConfig = (group: string) => `
+subscriptions:
+  airport:
+    url: https://example.com/sub
+output:
+  file: { enabled: true }
+groups:
+  custom:
+${group}
+`
+
+  it("rejects a level-order violation in custom-group members", () => {
+    const yaml = groupConfig(`    low:
+      level: 1
+      members:
+        - { type: customGroup, name: high }
+    high:
+      level: 2
+      includeProxies: true`)
+    const config = Effect.runSync(decodeConfig(parse(yaml), "test.yaml"))
+    expect(Effect.runSyncExit(validateConfig(config))._tag).toBe("Failure")
+  })
+
+  it("rejects includeLevels at or above the group level", () => {
+    const yaml = groupConfig(`    g:
+      level: 2
+      includeLevels: [2]`)
+    const config = Effect.runSync(decodeConfig(parse(yaml), "test.yaml"))
+    expect(Effect.runSyncExit(validateConfig(config))._tag).toBe("Failure")
+  })
+
+  it("rejects an unknown custom-group member", () => {
+    const yaml = groupConfig(`    g:
+      level: 1
+      members:
+        - { type: customGroup, name: nope }`)
+    const config = Effect.runSync(decodeConfig(parse(yaml), "test.yaml"))
+    expect(Effect.runSyncExit(validateConfig(config))._tag).toBe("Failure")
+  })
+
+  it("rejects a cross-subscription member in a subscription-scoped group", () => {
+    const yaml = `
+subscriptions:
+  a:
+    url: https://example.com/a
+    groups:
+      custom:
+        x:
+          level: 1
+          members:
+            - { type: customGroup, subscription: b, name: y }
+  b:
+    url: https://example.com/b
+output:
+  file: { enabled: true }
+`
+    const config = Effect.runSync(decodeConfig(parse(yaml), "test.yaml"))
+    expect(Effect.runSyncExit(validateConfig(config))._tag).toBe("Failure")
+  })
+
+  it("accepts a layered custom-group DAG", () => {
+    const yaml = groupConfig(`    region:
+      level: 1
+      includeProxies: true
+      includeRegexes: ["HK"]
+    usage:
+      level: 2
+      includeLevels: [1]
+    global:
+      level: 3
+      includeLevels: [2]
+      includeDirect: true`)
+    const config = Effect.runSync(decodeConfig(parse(yaml), "test.yaml"))
+    expect(Effect.runSyncExit(validateConfig(config))._tag).toBe("Success")
   })
 
   it("rejects an empty subscriptions map", () => {

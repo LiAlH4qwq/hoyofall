@@ -50,9 +50,9 @@ groups. Defining them twice makes sing-box fail.
 ### Choosing stable group tags
 
 `route.final` (and other references) should point at a group that always exists.
-Define an umbrella selector with `includeProxies: false` and
-`includeCustomGroups: true`, then reference that id. Referencing a per-region
-group that may be absent makes sing-box fail to start.
+Define an umbrella selector at a higher `level` with `includeProxies: false` and
+`includeLevels` (or explicit `customGroup` members), then reference that id.
+Referencing a per-region group that may be absent makes sing-box fail to start.
 
 ## Supported conversions
 

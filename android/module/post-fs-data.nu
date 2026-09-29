@@ -16,12 +16,20 @@ def seed [from: path, to: path, label: string] {
 }
 
 def main [] {
-  [ "out" "log" "singbox" ] | each {|dir| mkdir ($DATA | path join $dir) }
+  # The global data dir holds the supervisor config; each app owns a subdir.
+  [
+    $HOYOFALL_DIR
+    ($HOYOFALL_DIR | path join "out")
+    ($HOYOFALL_DIR | path join "log")
+    $SINGBOX_DIR
+    ($SINGBOX_DIR | path join "cache")
+    ($SINGBOX_DIR | path join "log")
+  ] | each {|dir| mkdir $dir }
 
-  seed ($MODULE | path join "config" "config.android.yaml") ($DATA | path join "config.yaml") "config"
-  seed ($MODULE | path join "config" "hoyofall.env.example") ($DATA | path join "hoyofall.env") "token env"
+  seed ($MODULE | path join "config" "config.android.yaml") ($HOYOFALL_DIR | path join "config.yaml") "config"
+  seed ($MODULE | path join "config" "hoyofall.env.example") ($HOYOFALL_DIR | path join "hoyofall.env") "token env"
   seed ($MODULE | path join "config" "android.conf.example") ($DATA | path join "android.conf") "module settings"
-  seed ($MODULE | path join "config" "singbox.json") ($DATA | path join "singbox" "config.json") "sing-box config"
+  seed ($MODULE | path join "config" "singbox.json") ($SINGBOX_DIR | path join "config.json") "sing-box config"
 
   ^chmod 700 $DATA
   print -e $"[hoyofall] post-fs-data: prepared ($DATA)"

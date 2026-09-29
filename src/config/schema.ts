@@ -20,6 +20,7 @@ export const NativeGroupMember = Schema.Struct({
 export const CustomGroupMember = Schema.Struct({
   type: Schema.Literal("customGroup"),
   name: Schema.NonEmptyString,
+  subscription: Schema.optional(Schema.NonEmptyString),
 })
 
 export const MemberRef = Schema.Union(
@@ -30,12 +31,10 @@ export const MemberRef = Schema.Union(
 export type MemberRef = typeof MemberRef.Type
 
 export const CustomGroup = Schema.Struct({
+  level: Schema.Int.pipe(Schema.greaterThan(0)),
   type: Schema.optionalWith(GroupType, { default: () => "selector" as const }),
   includeProxies: Schema.optionalWith(Schema.Boolean, { default: () => true }),
   includeNativeGroups: Schema.optionalWith(Schema.Boolean, {
-    default: () => false,
-  }),
-  includeCustomGroups: Schema.optionalWith(Schema.Boolean, {
     default: () => false,
   }),
   includeSubRegexes: Schema.optionalWith(Schema.Array(Schema.String), {
@@ -50,6 +49,10 @@ export const CustomGroup = Schema.Struct({
   excludeRegexes: Schema.optionalWith(Schema.Array(Schema.String), {
     default: () => [],
   }),
+  includeLevels: Schema.optionalWith(
+    Schema.Array(Schema.Int.pipe(Schema.greaterThan(0))),
+    { default: () => [] as ReadonlyArray<number> },
+  ),
   members: Schema.optionalWith(Schema.Array(MemberRef), {
     default: () => [],
   }),

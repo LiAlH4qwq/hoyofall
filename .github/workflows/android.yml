@@ -1,11 +1,8 @@
-# Build the Android module.
+# Build the flashable Android module with Nix.
 #
-# Everything this repository authors is Nushell, including CI: the default run
-# shell is `nu`, so no step is a bash script. (Nushell is installed by the
-# `hustcer/setup-nu` action before any `run` step executes.)
-#
-# The Node cross-compilation is long (upstream Node-on-Android is unsupported and
-# carries the Termux patches), hence the generous timeout and caches.
+# nix/android.nix assembles the module from prebuilt fixed-output downloads
+# (Termux aarch64 Node/Nushell and their libraries, plus the upstream SagerNet
+# sing-box build). There is no cross-compilation, so the job only needs Nix.
 
 name: android
 
@@ -21,58 +18,20 @@ permissions:
 jobs:
   module:
     runs-on: ubuntu-latest
-    timeout-minutes: 240
-    defaults:
-      run:
-        shell: nu --no-config-file {0}
     steps:
       - uses: actions/checkout@v4
 
-      - uses: hustcer/setup-nu@v1
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
+      - uses: cachix/install-nix-action@v30
         with:
-          node-version: "26"
-          cache: pnpm
+          extra_nix_config: |
+            experimental-features = nix-command flakes
 
-      - uses: nttld/setup-ndk@v1
-        id: ndk
-        with:
-          ndk-version: r28
-
-      - name: Cache builds
-        uses: actions/cache@v4
-        with:
-          path: |
-            android/.cache
-            android/build
-            ~/.cargo/registry
-            ~/.cargo/git
-            ~/.rustup/toolchains
-          key: android-${{ runner.os }}-${{ hashFiles('android/**/versions.lock', 'android/**/*.patch') }}
-
-      - name: Install dependencies and bundle
-        run: |
-          ^pnpm install --frozen-lockfile
-          ^pnpm build
-
-      - name: Add Rust Android target
-        run: |
-          ^rustup target add aarch64-linux-android
-
-      - name: Cross-compile Node, Nushell and stage the module
-        run: |
-          ^nu android/build.nu --arch arm64 --ndk $env.ANDROID_NDK_HOME
-
-      - name: Package the flashable zip
-        run: |
-          ^nu android/package.nu --arch arm64
+      - name: Build the flashable module
+        run: nix build .#hoyofall-android --print-build-logs
 
       - name: Upload module
         uses: actions/upload-artifact@v4
         with:
           name: hoyofall-android-arm64
-          path: android/dist/hoyofall-android-arm64.zip
+          path: result/hoyofall-android-arm64.zip
           if-no-files-found: error

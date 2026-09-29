@@ -4,7 +4,11 @@ import type { ResolvedConfig } from "../config/load"
 import type { FileOutput } from "../config/schema"
 import { assembleFragment, warningMessage, withBuiltinOutbounds } from "../convert/fragment"
 import { OutputWriteError } from "../errors"
-import type { DuplicateTagError, EmptyCustomGroupsError } from "../errors"
+import type {
+  DuplicateTagError,
+  EmptyCustomGroupsError,
+  GroupCycleError,
+} from "../errors"
 import { collectReady } from "../pipeline/cache"
 import type { CacheMap } from "../pipeline/types"
 import type { Fragment } from "../singbox/schema"
@@ -37,7 +41,7 @@ export const writeSnapshot = (
   cache: CacheMap,
 ): Effect.Effect<
   void,
-  OutputWriteError | DuplicateTagError | EmptyCustomGroupsError,
+  OutputWriteError | DuplicateTagError | EmptyCustomGroupsError | GroupCycleError,
   FileSystem.FileSystem | Path.Path
 > =>
   Effect.gen(function* () {

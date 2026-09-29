@@ -9,6 +9,10 @@
 
 export const MODULE = "/data/adb/modules/hoyofall"
 export const DATA = "/data/adb/hoyofall"
+# Per-app data directories under the global data dir. `android.conf` (the
+# supervisor settings) is the only file that lives at the data-dir root.
+export const HOYOFALL_DIR = "/data/adb/hoyofall/hoyofall"
+export const SINGBOX_DIR = "/data/adb/hoyofall/sing-box"
 
 export def service-names [] {
   [ "hoyofall" "sing-box" ]
@@ -22,25 +26,29 @@ export def service-spec [name: string] {
       args: [
         ($MODULE | path join "index.js")
         "--config"
-        ($DATA | path join "config.yaml")
+        ($HOYOFALL_DIR | path join "config.yaml")
       ]
-      config: ($DATA | path join "config.yaml")
-      log: ($DATA | path join "log" "hoyofall.log")
-      flag: ($DATA | path join "disabled")
+      config: ($HOYOFALL_DIR | path join "config.yaml")
+      log: ($HOYOFALL_DIR | path join "log" "hoyofall.log")
+      flag: ($HOYOFALL_DIR | path join "disabled")
     }
     "sing-box" => {
       name: "sing-box"
       bin: ($MODULE | path join "bin" "sing-box")
+      # `-D` is sing-box's working directory: its cache (cache.db, and any
+      # Clash-API external UI it downloads) lands under sing-box/cache.
       args: [
         "run"
         "-c"
-        ($DATA | path join "singbox" "config.json")
+        ($SINGBOX_DIR | path join "config.json")
         "-C"
-        ($DATA | path join "out")
+        ($HOYOFALL_DIR | path join "out")
+        "-D"
+        ($SINGBOX_DIR | path join "cache")
       ]
-      config: ($DATA | path join "singbox" "config.json")
-      log: ($DATA | path join "singbox" "sing-box.log")
-      flag: ($DATA | path join "singbox" "disabled")
+      config: ($SINGBOX_DIR | path join "config.json")
+      log: ($SINGBOX_DIR | path join "log" "sing-box.log")
+      flag: ($SINGBOX_DIR | path join "disabled")
     }
     _ => { error make { msg: $"unknown service ($name): hoyofall | sing-box" } }
   }

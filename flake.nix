@@ -18,13 +18,7 @@
         perSystem =
           { config, system, ... }:
           let
-            # `devShells.android` pulls nixpkgs' (unfree) Google NDK. Scope
-            # `allowUnfree` to this flake's own pkgs instance so consumers do not
-            # have to configure it.
-            pkgs = import inputs.nixpkgs {
-              inherit system;
-              config.allowUnfree = true;
-            };
+            pkgs = import inputs.nixpkgs { inherit system; };
 
             hoyofall = pkgs.callPackage ./nix/package.nix {
               nodejs = pkgs.nodejs_26 or pkgs.nodejs;
@@ -44,9 +38,9 @@
 
             packages.default = config.packages.hoyofall;
 
-            # Android (arm64). `hoyofall-android` is the flashable module built
-            # from prebuilt Termux aarch64 binaries (fixed-output downloads) and
-            # assembled with the repository's Nushell staging logic.
+            # Android (arm64): the flashable module assembled by nix/android.nix
+            # from prebuilt Termux aarch64 binaries and the upstream sing-box
+            # build, all fetched as fixed-output derivations.
             packages.hoyofall-android = android.module;
 
             devShells.default = pkgs.mkShell {
@@ -56,10 +50,6 @@
                 pkgs.check-jsonschema
               ];
             };
-
-            # Host toolchain + NDK for building the pinned subprojects from
-            # source (`nu android/build.nu`). See nix/android.nix.
-            devShells.android = android.devShell;
 
             formatter = pkgs.nixfmt-rfc-style;
           };

@@ -34,15 +34,49 @@ export const validateConfig = (
       ? []
       : ["output: at least one of output.file or output.http must be enabled"]
 
+    // Each scope's custom-group levels, and every subscription's levels (so a
+    // global group can be validated against the subscription it references).
+    const subscriptionLevels: Readonly<
+      Record<string, Readonly<Record<string, number>>>
+    > = Object.fromEntries(
+      Object.entries(config.subscriptions).map(([subscriptionId, subscription]) => [
+        subscriptionId,
+        Object.fromEntries(
+          Object.entries(subscription.groups.custom).map(([groupId, group]) => [
+            groupId,
+            group.level,
+          ]),
+        ),
+      ]),
+    )
+    const globalLevels: Readonly<Record<string, number>> = Object.fromEntries(
+      Object.entries(config.groups.custom).map(([groupId, group]) => [
+        groupId,
+        group.level,
+      ]),
+    )
+
     const subscriptionIssues = yield* Effect.all(
       Object.entries(config.subscriptions).map(([id, subscription]) =>
-        subscriptionIssuesOf(id, subscription),
+        subscriptionIssuesOf(
+          id,
+          subscription,
+          subscriptionLevels[id] ?? {},
+          subscriptionLevels,
+        ),
       ),
     )
 
     const instanceGroupIssues = yield* Effect.all(
       Object.entries(config.groups.custom).map(([id, group]) =>
-        customGroupIssues("groups", id, group, true),
+        customGroupIssues(
+          "groups",
+          id,
+          group,
+          true,
+          globalLevels,
+          subscriptionLevels,
+        ),
       ),
     )
 
@@ -82,6 +116,8 @@ const customGroupIssues = (
   id: string,
   group: CustomGroup,
   allowSubRegexes: boolean,
+  sameScopeLevels: Readonly<Record<string, number>>,
+  subscriptionLevels: Readonly<Record<string, Readonly<Record<string, number>>>>,
 ): Effect.Effect<ReadonlyArray<string>> =>
   Effect.gen(function* () {
     const label = `${scope}.custom.${id}`
@@ -105,12 +141,62 @@ const customGroupIssues = (
             `${label}: includeSubRegexes/excludeSubRegexes are only valid for instance-level groups`,
           ]
         : []
-    return [...regexIssueLists.flat(), ...subIssue]
+    const levelIssue = group.includeLevels.some(
+      (level) => level >= group.level,
+    )
+      ? [
+          `${label}.includeLevels: every level must be lower than this group's level ${group.level}`,
+        ]
+      : []
+    // Custom-group membership must form a DAG: only strictly lower levels in the
+    // same scope, or (global only) a custom group in a per-subscription scope.
+    const memberIssues = group.members.flatMap(
+      (member): ReadonlyArray<string> => {
+        if (member.type !== "customGroup") {
+          return []
+        }
+        if (member.subscription !== undefined) {
+          if (!allowSubRegexes) {
+            return [
+              `${label}.members: customGroup members cannot set subscription in a subscription-scoped group`,
+            ]
+          }
+          const levels = subscriptionLevels[member.subscription]
+          if (levels === undefined) {
+            return [
+              `${label}.members: unknown subscription ${member.subscription}`,
+            ]
+          }
+          return member.name in levels
+            ? []
+            : [
+                `${label}.members: unknown custom group ${member.subscription}/${member.name}`,
+              ]
+        }
+        const memberLevel = sameScopeLevels[member.name]
+        if (memberLevel === undefined) {
+          return [`${label}.members: unknown custom group ${member.name}`]
+        }
+        return memberLevel < group.level
+          ? []
+          : [
+              `${label}.members: custom group ${member.name} (level ${memberLevel}) must be lower than level ${group.level}`,
+            ]
+      },
+    )
+    return [
+      ...regexIssueLists.flat(),
+      ...subIssue,
+      ...levelIssue,
+      ...memberIssues,
+    ]
   })
 
 const subscriptionIssuesOf = (
   id: string,
   subscription: Subscription,
+  sameScopeLevels: Readonly<Record<string, number>>,
+  subscriptionLevels: Readonly<Record<string, Readonly<Record<string, number>>>>,
 ): Effect.Effect<ReadonlyArray<string>> =>
   Effect.gen(function* () {
     const excludeIssues = yield* regexIssues(
@@ -129,7 +215,14 @@ const subscriptionIssuesOf = (
     ])
     const customIssues = yield* Effect.all(
       Object.entries(subscription.groups.custom).map(([groupId, group]) =>
-        customGroupIssues(`subscriptions.${id}.groups`, groupId, group, false),
+        customGroupIssues(
+          `subscriptions.${id}.groups`,
+          groupId,
+          group,
+          false,
+          sameScopeLevels,
+          subscriptionLevels,
+        ),
       ),
     )
     return [

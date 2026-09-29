@@ -30,11 +30,15 @@ let
   system = stdenv.hostPlatform.system;
 
   pnpmDepsHash = pnpmDepsHashes.${system} or pnpmDepsHashes.default;
+
+  # Single source of truth for the version: the root package.json. The CLI
+  # (`src/version.ts`) and the Android module read the same field.
+  version = (builtins.fromJSON (builtins.readFile ../package.json)).version;
 in
 
 stdenv.mkDerivation (finalAttrs: {
   pname = "hoyofall";
-  version = "0.1.0";
+  inherit version;
 
   src = lib.cleanSourceWith {
     src = ../.;

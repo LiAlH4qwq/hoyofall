@@ -14,22 +14,26 @@
 # groups (instance-level, recommended)
 # ---------------------------------------------------------------------------
 # Custom groups select members by matching the subscription name and the entity
-# name separately:
+# name separately, and may reference other custom groups of a strictly lower
+# `level` in the same scope, so the outbound graph is always a DAG:
+#   level                                required; order within this scope
 #   includeSubRegexes/excludeSubRegexes  filter subscriptions by `name`
 #   includeRegexes/excludeRegexes        filter entity names (proxy/group/group id)
+#   includeLevels                        include same-scope groups at those levels
 # Empty regex lists mean "all". The group id is the final outbound tag verbatim.
 groups:
   custom:
-    # A urltest group of every Hong Kong node from any subscription.
+    # A urltest group of every Hong Kong node from any subscription (level 1).
     auto-hk:
+      level: 1                            # required, int > 0
       type: urltest                       # selector | urltest. Default: selector
       includeProxies: true                # Default: true
       includeNativeGroups: false          # Default: false
-      includeCustomGroups: false          # Default: false
       includeSubRegexes: []               # match subscription name; [] = all. Default: []
       excludeSubRegexes: []               # Default: []
       includeRegexes: ["HK"]              # match entity name; [] = all. Default: []
       excludeRegexes: []                  # Default: []
+      includeLevels: []                   # same-scope groups at these levels. Default: []
       members: []                         # typed refs, see below. Default: []
       includeDirect: false                # Default: false
       includeBlock: false                 # Default: false
@@ -40,12 +44,26 @@ groups:
       tolerance: 50                       # urltest only. Default: 50
       idleTimeoutSeconds: 1800            # urltest only. Default: 1800
       interruptExistConnections: false    # Default: false
-    # Typed members (all optional). `subscription` is the subscription `name`.
+
+    # A stable umbrella (level 2) over every level-1 group, plus direct.
+    default:
+      level: 2
+      type: selector
+      includeProxies: false
+      includeLevels: [1]                  # all level-1 groups (auto-hk, ...)
+      includeDirect: true
+
+    # Typed members (all optional) are exact references and ignore every
+    # include/exclude regex filter. For proxy/nativeGroup, `subscription` names
+    # the subscription; for customGroup, `subscription` opts into a
+    # per-subscription scope and is only valid here (global). A same-scope
+    # customGroup member must be at a strictly lower level.
     # pick:
+    #   level: 1
     #   members:
     #     - { type: proxy, subscription: example, name: "HK-01" }
     #     - { type: nativeGroup, subscription: example, name: "auto" }
-    #     - { type: customGroup, name: auto-hk }   # another custom group id
+    #     - { type: customGroup, subscription: example, name: hk }  # per-sub group
 
 # ---------------------------------------------------------------------------
 # convert (instance-wide)
@@ -93,11 +111,12 @@ subscriptions:
         loadBalance: selector      # selector | urltest | skip. Default: selector
       custom:
         hk:
+          level: 1
           type: selector
           includeRegexes: ["HK|香港"]   # matches original names within this subscription
           excludeRegexes: []
           # same options as instance-level groups except the *SubRegexes fields
-          # (includeProxies, members, includeNativeGroups, includeCustomGroups,
+          # (level, includeProxies, members, includeNativeGroups, includeLevels,
           # includeDirect, includeBlock, default, interruptExistConnections,
           # onEmpty, url, intervalSeconds, tolerance, idleTimeoutSeconds)
 

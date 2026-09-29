@@ -20,6 +20,7 @@ import {
 import { FetchError } from "../errors"
 import type {
   EmptyCustomGroupsError,
+  GroupCycleError,
   PayloadDecodeError,
   StrictConversionError,
 } from "../errors"
@@ -28,7 +29,7 @@ import { writeSnapshot } from "../output/file"
 import type { CacheMap, SubscriptionState } from "./types"
 
 const failureMessage = (
-  error: FetchError | PayloadDecodeError | StrictConversionError,
+  error: FetchError | PayloadDecodeError | StrictConversionError | GroupCycleError,
 ): string => {
   switch (error._tag) {
     case "FetchError":
@@ -37,6 +38,8 @@ const failureMessage = (
       return `payload decode failed: ${error.issues.join("; ")}`
     case "StrictConversionError":
       return `strict conversion failed: ${error.issues.join("; ")}`
+    case "GroupCycleError":
+      return `outbound cycle: ${error.groups.join(" -> ")}`
   }
 }
 
@@ -147,6 +150,8 @@ const refreshOne = (
         failedSubscription(subscription.id, failureMessage(error)),
       StrictConversionError: (error) =>
         failedSubscription(subscription.id, failureMessage(error)),
+      GroupCycleError: (error) =>
+        failedSubscription(subscription.id, failureMessage(error)),
     }),
   )
 
@@ -228,6 +233,10 @@ export const startInstance = (
                 `refusing to write output: ${error.groups
                   .map(warningMessage)
                   .join("; ")}`,
+              ),
+            GroupCycleError: (error: GroupCycleError) =>
+              Effect.logError(
+                `refusing to write output: ${error.scope}: outbound cycle ${error.groups.join(", ")}`,
               ),
           }),
         ),

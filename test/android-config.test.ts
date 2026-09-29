@@ -13,6 +13,8 @@ describe("android/module/config/config.android.yaml", () => {
     })
     const config = Effect.runSync(program)
     expect(Object.keys(config.subscriptions)).toContain("default")
-    expect(config.output.file.path).toBe("/data/adb/hoyofall/out/fragment.json")
+    expect(config.output.file.path).toBe(
+      "/data/adb/hoyofall/hoyofall/out/fragment.json",
+    )
   })
 })

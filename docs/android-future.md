@@ -56,8 +56,9 @@ find each other. Proposed contract:
 /data/adb/node/bin/node          # node-android
 /data/adb/nushell/bin/nu         # nushell-android
 /data/adb/nu-supervisor/         # supervisor + control.nu + services.nu + lib.nu
-/data/adb/hoyofall/              # app state (config, out, log) + spec
-/data/adb/sing-box/              # app state + spec
+/data/adb/hoyofall/              # supervisor config (android.conf)
+/data/adb/hoyofall/hoyofall/     # hoyofall app state (config, env, out, log) + spec
+/data/adb/hoyofall/sing-box/     # sing-box app state (config, cache, log) + spec
 ```
 
 Apps register a **service spec** rather than editing supervisor code:

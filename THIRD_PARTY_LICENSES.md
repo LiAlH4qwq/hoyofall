@@ -36,18 +36,6 @@ aarch64 packages pinned in `nix/android.nix`. The Nix package
 `packages.<system>.hoyofall` bundles only hoyofall (MIT) and the MIT-licensed
 WebUI dependencies.
 
-## Vendored patches
-
-`android/node/patches/termux/**` and `android/nushell/patches/termux/**` are
-copied verbatim from [`termux/termux-packages`](https://github.com/termux/termux-packages)
-at the commit recorded in each `android/*/versions.lock`. Per
-[Termux's license](https://github.com/termux/termux-packages/blob/master/LICENSE.md),
-**package patches are licensed under the same license as the package they
-build**: the Node patches under Node.js's MIT license, and the Nushell patch
-under Nushell's MIT license. They are therefore compatible with this
-repository's MIT license. Provenance and commit pins are recorded in the
-matching `patches/README.md` and `versions.lock`.
-
 ## GNU GPL-3.0-or-later — sing-box
 
 The Android module redistributes an **unmodified** prebuilt sing-box binary:
@@ -78,7 +66,7 @@ included in the flashable module.
 
 **Written offer / corresponding source.** hoyofall does not modify sing-box.
 The corresponding source of the bundled version is published upstream at the
-tag matching `android/singbox/versions.lock`:
+tag pinned in `nix/android.nix`:
 <https://github.com/SagerNet/sing-box/tree/v1.14.2>. The exact pinned tarball
 and its SHA-256 are recorded in that file.
 

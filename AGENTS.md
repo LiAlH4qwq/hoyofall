@@ -26,11 +26,10 @@ pnpm build       # rolldown bundle + JSON schema (dist/)
 pnpm dev --config config.yaml
 ```
 
-Android cross-compilation has its own Nushell entrypoints (Nushell, not bash):
+The Android module is assembled from prebuilt binaries by Nix:
 
 ```
-nu android/build.nu --arch arm64      # node + nushell + module payload
-nu android/package.nu --arch arm64    # hoyofall-android-arm64.zip
+nix build .#hoyofall-android   # result/hoyofall-android-arm64.zip
 ```
 
 ## Layout
@@ -43,10 +42,10 @@ nu android/package.nu --arch arm64    # hoyofall-android-arm64.zip
 - `src/diagnostics.ts` – CLI usage and friendly error formatting
 - `scripts/check-ast.ts` – AST enforcement of the rules below
 - `scripts/check-shell.ts` – bans authored bash / POSIX shell scripts
-- `android/` – Android subprojects: `node/` + `nushell/` cross-compilation,
-  `singbox/` prebuilt fetch, `webui/` source, `module/` (Magisk/KernelSU
-  payload), `build.nu`, `package.nu`
-- `nix/` – `package.nix`, `overlay.nix`, NixOS `module.nix`; `flake.nix`
+- `android/` – Android module: `webui/` source, `module/` (Magisk/KernelSU
+  payload); assembled from prebuilt binaries by `nix/android.nix`
+- `nix/` – `package.nix`, `overlay.nix`, `android.nix`, NixOS `module.nix`;
+  `flake.nix`
 
 ## Hard rules (enforced by `pnpm lint`)
 
@@ -108,23 +107,12 @@ Two deliberate exceptions:
 Across the rest of the repository, port logic to Nushell rather than writing a
 shell script.
 
-## Android subprojects
+## Android module
 
-`android/` holds two vendored cross-compilation subprojects plus the module
-payload. They are part of this repository but are kept self-contained so they
-can be split out later (the Nushell port in particular starts minimal and grows
-toward a full build):
+`android/` holds the Magisk/KernelSU module payload and the WebUI source. There
+is **no cross-compilation**: the flake assembles the module from prebuilt
+binaries fetched as fixed-output derivations.
 
-- `android/node/` – cross-compiles Node for Android (`aarch64-linux-android`
-  and `x86_64-linux-android`). `versions.lock` pins the NDK and Node; `patches/`
-  vendors the Termux `nodejs` patch set; `build.nu` drives Node's `./configure`
-  + `make` against the NDK.
-- `android/nushell/` – cross-compiles Nushell for Android. `versions.lock` pins
-  Nushell; `patches/` vendors the Termux `sysinfo` patch; `build.nu` drives
-  Cargo with the NDK linker and the reduced feature set.
-- `android/singbox/` – fetches the pinned prebuilt sing-box for Android
-  (`fetch.nu` + `versions.lock`); `nix/android.nix` uses a fixed-output
-  derivation for the same tarball.
 - `android/module/` – the Magisk-format module: exec-only `.sh` shims (plus the
   `customize.sh` chmod), `.nu` logic (`services.nu` service specs, `service.nu`
   supervisor, `control.nu` control protocol, `post-fs-data.nu`,
@@ -134,8 +122,9 @@ toward a full build):
   a pnpm workspace package with its own deps), bundled by rolldown into
   `android/module/webroot/app.js`; it controls services and edits config/log
   only through `control.nu`.
-- `android/build.nu` orchestrates node + nushell + sing-box + module;
-  `android/package.nu` assembles `hoyofall-android-<arch>.zip`.
+- `nix/android.nix` – fetches the pinned Termux aarch64 Node/Nushell packages
+  (with their libraries and a CA bundle) and the upstream SagerNet sing-box
+  build, then stages and zips the module.
 
 The module is intentionally **all-in-one** for now; the planned split into
 separate runtime / supervisor / app / WebUI modules, their stable interfaces and
@@ -235,17 +224,38 @@ small helper and justify it in a comment.
 - `config.example.yaml` is the canonical example; copy it to `config.yaml`.
 - `config.yaml` (and `config.local.yaml`) are gitignored because they contain
   subscription tokens. Use `urlEnv` to pull tokens from the environment.
+- Custom groups form a DAG: every group needs a `level`, and may only reference
+  custom groups of a strictly lower level (same scope) or a lower tier
+  (`proxy` < native group < per-subscription custom < global custom).
+  `includeLevels` bulk-includes lower same-scope groups. Explicit `members`
+  bypass every include/exclude regex filter.
+
+## Versioning
+
+The **only** hand-edited version is `"version"` in the root `package.json`.
+Everything else derives from it: the CLI (`src/version.ts`), the Nix derivation
+(`nix/package.nix`), and the Android `module.prop` `version`/`versionCode`
+(injected by `nix/android.nix`).
+
+hoyofall is pre-1.0 (`0.y.z`): while the major is `0`, the public API is **not**
+stable. Bump with `pnpm version` on every change:
+
+- `patch` (`0.y.Z+1`): fixes, docs, internal refactors — no observable change.
+- `minor` (`0.Y+1.0`): a new feature **or** any observable/breaking change to a
+  public surface (CLI flags, config schema, HTTP routes, on-device layout).
+- `1.0.0`: only when those public surfaces are declared stable.
+
+No pre-release suffixes are used. The Android `versionCode` is derived as
+`major*10000 + minor*100 + patch` and must stay monotonic.
 
 ## Nix
 
 - `flake-parts`: `perSystem.packages.hoyofall` (and `default`),
   `packages.hoyofall-android` (`nix/android.nix`: the flashable module assembled
   from **prebuilt Termux aarch64 binaries**, fetched as fixed-output
-  derivations, then staged/zipped by `android/build.nu` / `android/package.nu`),
-  `devShells.default`, `devShells.android` (host toolchain + NDK for building the
-  pinned subprojects from source), `overlays`, `nixosModules`. nixpkgs'
-  `pkgsCross.aarch64-android*` sets are intentionally unused (uncached and broken
-  from source).
+  derivations, then staged/zipped in the derivation), `devShells.default`,
+  `overlays`, `nixosModules`. nixpkgs' `pkgsCross.aarch64-android*` sets are
+  intentionally unused (uncached and broken from source).
 - `nix/package.nix` builds with pnpm + rolldown. The pnpm store format changes
   between pnpm majors, so `flake.nix` pins `pnpm_12` and the dependency hash
   lives in a per-system `pnpmDepsHashes` map (with a `default`); refresh it when

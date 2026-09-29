@@ -1,15 +1,11 @@
 # Android integration for the flake.
 #
-# nixpkgs' Android cross toolchain (`pkgsCross.aarch64-android*`) is not in the
-# binary cache and is broken when built from source (compiler-rt, tzdata, …), and
-# a sandboxed build of Node/Nushell for Android needs an online Rust target. So
-# the all-in-one flashable module is assembled from **prebuilt binaries**:
-# Termux aarch64 packages (Node, Nushell, libraries) plus the upstream sing-box
-# Android build, fetched as fixed-output derivations so every download happens
-# before the build and the build phases run offline.
-#
-# `devShell` remains available for building the pinned subprojects from source
-# against an NDK (`nu android/build.nu`).
+# The all-in-one flashable module is assembled from **prebuilt binaries**:
+# Termux aarch64 packages (Node, Nushell, their libraries and a CA bundle) plus
+# the upstream SagerNet sing-box Android build. Every download is a
+# fixed-output derivation, so it happens before the build and the build phases
+# run offline. There is no cross-compilation here: no NDK or Rust toolchain is
+# involved.
 {
   pkgs,
   lib,
@@ -72,6 +68,14 @@ let
 
   termuxPrefix = "data/data/com.termux/files/usr";
 
+  # Derive a monotonic Magisk versionCode from the SemVer version (no
+  # pre-releases): major*10000 + minor*100 + patch.
+  versionParts = lib.splitVersion hoyofall.version;
+  versionPart = n: lib.toInt (builtins.elemAt versionParts n);
+  versionCode = versionPart 0 * 10000 + versionPart 1 * 100 + versionPart 2;
+
+in
+{
   module =
     pkgs.runCommand "hoyofall-android-arm64-${hoyofall.version}"
       {
@@ -83,17 +87,21 @@ let
           pkgs.zstd
           pkgs.gnutar
           pkgs.gzip
-          pkgs.nushell
           pkgs.zip
         ];
-        passthru = {
-          inherit runtimeDebs singbox;
-        };
         meta = {
           description = "hoyofall all-in-one flashable module for Android (arm64)";
           # The module aggregates MIT hoyofall with bundled third-party binaries;
           # sing-box is GPL-3.0-or-later. See THIRD_PARTY_LICENSES.md.
-          license = with lib.licenses; [ mit gpl3Plus apache2 mpl20 ];
+          license = with lib.licenses; [
+            mit
+            gpl3Plus
+            asl20
+            mpl20
+            llvm-exception
+            unicode-30
+            zlib
+          ];
           platforms = lib.platforms.unix;
         };
       }
@@ -128,52 +136,35 @@ let
         singboxBin=$(find "$TMPDIR/singbox" -name sing-box -type f | head -n1)
         [[ -n "$singboxBin" ]]
 
-        nu --no-config-file ${cleanedSrc}/android/build.nu \
-          --root ${cleanedSrc} \
-          --stage-only \
-          --arch arm64 \
-          --node-bin "$node" \
-          --nu-bin "$nu" \
-          --singbox-bin "$singboxBin" \
-          --bundle ${hoyofall}/lib/hoyofall/index.js \
-          --schema ${hoyofall}/share/hoyofall/schema.json \
-          --lib-dir "$TMPDIR/prebuilt/lib" \
-          --cert "$cert" \
-          --out "$TMPDIR/module"
+        # Stage the Magisk/KernelSU module tree.
+        stage="$TMPDIR/module"
+        cp -r ${cleanedSrc}/android/module "$stage"
+        chmod -R u+w "$stage"
+        mkdir -p "$stage/bin" "$stage/lib"
+        cp "$node" "$stage/bin/node"
+        cp "$nu" "$stage/bin/nu"
+        cp "$singboxBin" "$stage/bin/sing-box"
+        cp ${hoyofall}/lib/hoyofall/index.js "$stage/index.js"
+        cp ${hoyofall}/share/hoyofall/schema.json "$stage/schema.json"
+        rm -rf "$stage/webroot"
+        cp -a ${hoyofall}/share/hoyofall/webroot "$stage/webroot"
+        cp -r ${cleanedSrc}/licenses "$stage/licenses"
+        cp ${cleanedSrc}/THIRD_PARTY_LICENSES.md "$stage/THIRD_PARTY_LICENSES.md"
+        cp -L "$TMPDIR/prebuilt/lib/"*.so* "$stage/lib/"
+        mkdir -p "$stage/etc/ssl"
+        cp "$cert" "$stage/etc/ssl/cert.pem"
 
-        # Use the bundled WebUI built by the hoyofall derivation (adds app.js).
-        rm -rf "$TMPDIR/module/webroot"
-        cp -a ${hoyofall}/share/hoyofall/webroot "$TMPDIR/module/webroot"
+        # The committed module.prop is a version-less template; stamp both fields
+        # from the package version (`hoyofall.version`).
+        props="$stage/module.prop"
+        sed -e '/^version=/d' -e '/^versionCode=/d' "$props" > "$props.tmp"
+        printf 'version=v%s\nversionCode=%s\n' "${hoyofall.version}" "${toString versionCode}" >> "$props.tmp"
+        mv "$props.tmp" "$props"
+
+        chmod 0755 "$stage"/bin/* "$stage"/*.sh
 
         mkdir -p "$out"
-        cp -a "$TMPDIR/module" "$out/module"
-
-        nu --no-config-file ${cleanedSrc}/android/package.nu \
-          --root ${cleanedSrc} \
-          --input "$TMPDIR/module" \
-          --out "$out/hoyofall-android-arm64.zip"
+        cp -a "$stage" "$out/module"
+        (cd "$stage" && zip -r -9 "$out/hoyofall-android-arm64.zip" .)
       '';
-
-  devShell = pkgs.mkShell {
-    packages = [
-      (pkgs.nodejs_26 or pkgs.nodejs)
-      pkgs.pnpm
-      pkgs.cargo
-      pkgs.rustc
-      pkgs.rustup
-      pkgs.zip
-      pkgs.curl
-      pkgs.gnumake
-      pkgs.python3
-      pkgs.patch
-      pkgs.pkg-config
-      pkgs.nushell
-      pkgs.androidenv.androidPkgs.ndk-bundle
-    ];
-
-    ANDROID_NDK_ROOT = "${pkgs.androidenv.androidPkgs.ndk-bundle}";
-  };
-in
-{
-  inherit module devShell runtimeDebs singbox;
 }

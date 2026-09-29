@@ -70,6 +70,11 @@ export class EmptyCustomGroupsError extends Data.TaggedError("EmptyCustomGroupsE
   readonly groups: ReadonlyArray<EmptyCustomGroupError>
 }> {}
 
+export class GroupCycleError extends Data.TaggedError("GroupCycleError")<{
+  readonly scope: string
+  readonly groups: ReadonlyArray<string>
+}> {}
+
 export class DuplicateTagError extends Data.TaggedError("DuplicateTagError")<{
   readonly tags: ReadonlyArray<string>
 }> {}

@@ -36,17 +36,24 @@ Custom groups select members across all subscriptions by matching the
 `outbounds` by regex, so hoyofall resolves the regexes and typed `members` into
 explicit tags. The final tag of an instance-level group is its id verbatim.
 
+Custom groups form a **DAG**. The scopes are ordered `proxy` < `native group` <
+per-subscription custom group < global custom group; within a custom scope a
+group may only reference groups at a strictly lower `level`. Lower levels never
+reference higher ones, and different subscriptions cannot reference each other.
+Invalid references and level violations fail at config validation.
+
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `groups.custom.<id>` | object | `{}` | A custom group; `<id>` is the final outbound tag. |
+| `.level` | integer > 0 | — | **Required.** Order of this group within its scope; referenced custom groups must be strictly lower. |
 | `.type` | `"selector"` \| `"urltest"` | `"selector"` | Group kind. |
 | `.includeProxies` | boolean | `true` | Consider proxies. |
 | `.includeNativeGroups` | boolean | `false` | Consider converted native groups. |
-| `.includeCustomGroups` | boolean | `false` | Consider per-subscription custom groups and other instance groups (resolution is order-independent). |
-| `.includeSubRegexes` | regex string array | `[]` | Keep candidates from subscriptions whose `name` matches any regex; empty = all. |
-| `.excludeSubRegexes` | regex string array | `[]` | Drop candidates from subscriptions whose `name` matches any regex. |
+| `.includeSubRegexes` | regex string array | `[]` | Keep candidates from subscriptions whose `name` matches any regex; empty = all. Instance-level only. |
+| `.excludeSubRegexes` | regex string array | `[]` | Drop candidates from subscriptions whose `name` matches any regex. Instance-level only. |
 | `.includeRegexes` | regex string array | `[]` | Keep entity names matching any regex; empty = all. |
 | `.excludeRegexes` | regex string array | `[]` | Drop entity names matching any regex. |
+| `.includeLevels` | integer array | `[]` | Include same-scope custom groups at these levels (each must be `< level`). |
 | `.members` | array of typed refs | `[]` | Exact members; see below. |
 | `.includeDirect` | boolean | `false` | Append `direct`. |
 | `.includeBlock` | boolean | `false` | Append `block`. |
@@ -58,14 +65,18 @@ explicit tags. The final tag of an instance-level group is its id verbatim.
 | `.tolerance` | integer | `50` | `urltest` tolerance (ms). |
 | `.idleTimeoutSeconds` | integer > 0 | `1800` | `urltest` idle timeout. |
 
-`.members` entries are tagged structs (exact matches, still subject to the
-`includeSubRegexes` scope for subscription-derived members):
+`.members` entries are exact references; they bypass **every** include/exclude
+regex filter (`includeSubRegexes`, `excludeSubRegexes`, `includeRegexes`,
+`excludeRegexes`) — only the regex-based pools honour those. A `customGroup`
+member may set `subscription` only in the global scope, to name a
+per-subscription custom group:
 
 ```yaml
 members:
-  - { type: proxy,       subscription: default, name: "🇭🇰 HK-01" }
+  - { type: proxy,       subscription: default, name: "HK-01" }
   - { type: nativeGroup, subscription: default, name: "auto" }
-  - { type: customGroup, name: auto-hk }   # another custom group id
+  - { type: customGroup, name: hk-auto }                  # global, lower level
+  - { type: customGroup, subscription: default, name: x } # per-subscription custom
 ```
 
 ## `convert` (instance-wide)

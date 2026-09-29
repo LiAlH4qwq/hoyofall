@@ -5,8 +5,7 @@ hoyofall ships a flake with:
 | Output | Contents |
 |---|---|
 | `packages.<system>.hoyofall` (and `default`) | The Node bundle plus `share/hoyofall/schema.json`. |
-| `packages.<system>.hoyofall-android` | All-in-one Magisk/KernelSU module for Android arm64 (hoyofall + sing-box + WebUI). |
-| `devShells.<system>.android` | Host toolchain + Android NDK for building the pinned subprojects. |
+| `packages.<system>.hoyofall-android` | All-in-one Magisk/KernelSU module for Android arm64 (hoyofall + sing-box + WebUI), assembled from prebuilt binaries. |
 | `overlays.default` | Adds `pkgs.hoyofall`. |
 | `nixosModules.default` | A single-instance `services.hoyofall` module. |
 
@@ -32,13 +31,14 @@ enough.
         intervalSeconds = 3600;
       };
       groups.custom = {
-        "hk-auto" = { type = "urltest"; includeRegexes = [ "🇭🇰" ]; };
-        "us-auto" = { type = "urltest"; includeRegexes = [ "🇺🇸" ]; };
+        "hk-auto" = { level = 1; type = "urltest"; includeRegexes = [ "HK" ]; };
+        "us-auto" = { level = 1; type = "urltest"; includeRegexes = [ "US" ]; };
         # stable umbrella selector for sing-box to reference via route.final
         default = {
+          level = 2;
           type = "selector";
           includeProxies = false;
-          includeCustomGroups = true;
+          includeLevels = [ 1 ];
           includeDirect = true;
         };
       };
@@ -97,13 +97,11 @@ enough.
 
 `nix/android.nix` assembles the flashable all-in-one module from **prebuilt
 binaries** — Termux aarch64 Node/Nushell and their shared libraries, plus the
-upstream sing-box Android build — fetched as fixed-output derivations, then
-reuses the repository's Nushell staging/zip logic (`android/build.nu
---stage-only`, `android/package.nu`):
+upstream sing-box Android build — fetched as fixed-output derivations and
+staged/zipped directly in the derivation:
 
 ```bash
 nix build .#hoyofall-android   # result/{module,hoyofall-android-arm64.zip}
-nix develop .#android          # host toolchain + NDK for the pinned scripts
 ```
 
 nixpkgs' `pkgsCross.aarch64-android*` sets are deliberately not used: they are

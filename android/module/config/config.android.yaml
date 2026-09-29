@@ -1,9 +1,9 @@
 # hoyofall configuration for the Android module.
 #
-# The module copies this to /data/adb/hoyofall/config.yaml on first boot and
-# never overwrites an existing file. Subscription tokens belong in
-# /data/adb/hoyofall/hoyofall.env (see hoyofall.env.example), referenced here
-# with urlEnv, so this file stays free of secrets.
+# The module copies this to /data/adb/hoyofall/hoyofall/config.yaml on first
+# boot and never overwrites an existing file. Subscription tokens belong in
+# /data/adb/hoyofall/hoyofall/hoyofall.env (see hoyofall.env.example),
+# referenced here with urlEnv, so this file stays free of secrets.
 #
 # Point `output.file.path` anywhere readable by your sing-box module. The
 # module's own watcher can also copy the fragment into the sing-box config
@@ -12,14 +12,16 @@
 groups:
   custom:
     auto:
+      level: 1
       type: urltest
       includeProxies: true
       includeRegexes: []
       onEmpty: skip
     proxy:
+      level: 2
       type: selector
       includeProxies: true
-      includeCustomGroups: true
+      includeLevels: [1]
       includeDirect: true
       onEmpty: skip
 
@@ -27,17 +29,14 @@ convert:
   emitBuiltinOutbounds: false
   proxyNameFormat: "{sub}-{name}"
 
-# A subscription is required by the schema. This default points at a closed
-# local port so the daemon starts, logs one failed refresh, writes an empty
-# fragment, and keeps running; using `urlEnv` without the variable set would fail
-# at startup and make the supervisor restart-loop instead.
-#
-# Replace `url` with your subscription, or switch to `urlEnv: HOYOFALL_SUB_URL`
-# and put the token in hoyofall.env.
+# A subscription is required by the schema. The seeded hoyofall.env defines
+# HOYOFALL_SUB_URL to a closed local port, so the daemon starts, logs one failed
+# refresh, writes an empty fragment, and keeps running until you replace it with
+# your real subscription URL in hoyofall.env (it never touches this file).
 subscriptions:
   default:
     name: default
-    url: "http://127.0.0.1:9/disabled"
+    urlEnv: HOYOFALL_SUB_URL
     intervalSeconds: 86400
     format: auto
     onUnsupported: skip
@@ -46,7 +45,7 @@ output:
   file:
     enabled: true
     mode: aggregate
-    path: /data/adb/hoyofall/out/fragment.json
+    path: /data/adb/hoyofall/hoyofall/out/fragment.json
     permissions: "0644"
     pretty: true
   http:

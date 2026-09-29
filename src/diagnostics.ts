@@ -5,7 +5,7 @@ import {
   UsageError,
 } from "./errors"
 
-export const version = "0.1.0"
+export { version } from "./version"
 
 export const usage = `hoyofall - convert mihomo (Clash.Meta) subscriptions into sing-box outbound fragments
 
