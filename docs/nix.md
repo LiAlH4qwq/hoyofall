@@ -109,9 +109,8 @@ nix develop .#android          # host toolchain + NDK for the pinned scripts
 nixpkgs' `pkgsCross.aarch64-android*` sets are deliberately not used: they are
 uncached and broken when built from source (compiler-rt, tzdata, …). Every Termux
 package is a fixed-output download, so the build runs offline once fetched;
-versions/hashes are pinned in `nix/android.nix`. On dual-stack/TUN hosts where
-IPv6 to some hosts is reset, force IPv4 for the Nix daemon (see
-[android.md](./android.md#troubleshooting)). Full guide: [android.md](./android.md).
+versions/hashes are pinned in `nix/android.nix`. Full guide:
+[android.md](./android.md).
 
 ## Updating the package
 

@@ -282,18 +282,3 @@ The **source-built subprojects** (`nu android/build.nu`) pin their own inputs:
   `android.conf`; the watcher logs each injection and hook result.
 - **Build fails applying a patch**: the vendored patches are tied to the pinned
   Node/Nushell versions; re-vendor from the matching Termux revision.
-- **`nix build` fails downloading `platform-tools…zip` or the NDK with
-  “Connection reset by peer”**: the host is resolving the Google host to an IPv6
-  address your TUN/proxy does not carry, while IPv4 works (a browser falls back,
-  Nix's `curl` does not). Force IPv4 for Nix's fetchers via the **Nix daemon's**
-  environment — fetcher `impureEnvVars` come from the daemon, not your shell:
-
-  ```nix
-  # NixOS
-  systemd.services.nix-daemon.environment.NIX_CURL_FLAGS = "-4";
-  ```
-
-  Then `sudo systemctl restart nix-daemon` (or `nixos-rebuild switch`). A proxy
-  (`https_proxy`/`all_proxy` in the same daemon environment) also works. The
-  Android inputs are fixed-output derivations, so once they fetch, the build
-  phases run offline.
