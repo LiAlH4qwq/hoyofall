@@ -3,11 +3,10 @@
 hoyofall's own source code is licensed under the MIT License (see
 [`LICENSE`](./LICENSE)). That license covers only the original hoyofall code.
 
-The repository also **vendors** third-party patches and, when built, the Android
-module **redistributes prebuilt third-party binaries** inside
-`hoyofall-android-<arch>.zip` (and the Nix `hoyofall-android` output). Those
-components remain under their own licenses, listed below. Full license texts are
-in [`licenses/`](./licenses/).
+The repository, when built, produces an Android module that **redistributes
+prebuilt third-party binaries** inside `hoyofall-android-<arch>.zip` (and the
+Nix `hoyofall-android` output). Those components remain under their own
+licenses, listed below. Full license texts are in [`licenses/`](./licenses/).
 
 Redistribution of the flashable Android module is therefore an aggregate of
 MIT-licensed hoyofall code and the third-party components below; it is **not**
@@ -60,8 +59,10 @@ In addition, no derivative work may use the name or imply association
 with this application without prior consent.
 ```
 
-The full license text ships as
-[`licenses/GPL-3.0-or-later.txt`](./licenses/GPL-3.0-or-later.txt) and is
+The verbatim upstream license ships as
+[`licenses/sing-box-LICENSE.txt`](./licenses/sing-box-LICENSE.txt), and the full
+GNU GPL-3.0 text as
+[`licenses/GPL-3.0-or-later.txt`](./licenses/GPL-3.0-or-later.txt); both are
 included in the flashable module.
 
 **Written offer / corresponding source.** hoyofall does not modify sing-box.
