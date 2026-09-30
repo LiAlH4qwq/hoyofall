@@ -94,7 +94,7 @@ stdenv.mkDerivation (finalAttrs: {
   '';
 
   meta = {
-    description = "Convert mihomo (Clash.Meta) subscriptions into sing-box outbound fragments";
+    description = "Provably type-safe converter from mihomo (Clash.Meta) subscriptions into sing-box outbound fragments";
     license = lib.licenses.mit;
     mainProgram = "hoyofall";
     platforms = lib.platforms.unix;

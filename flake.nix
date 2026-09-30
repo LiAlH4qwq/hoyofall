@@ -1,5 +1,5 @@
 {
-  description = "hoyofall - convert mihomo (Clash.Meta) subscriptions into sing-box outbound fragments";
+  description = "hoyofall - a provably type-safe converter from mihomo (Clash.Meta) subscriptions into sing-box outbound fragments";
 
   inputs = {
     nixpkgs.url = "nixpkgs/nixpkgs-unstable";

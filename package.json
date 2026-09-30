@@ -1,9 +1,21 @@
 {
   "name": "hoyofall",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "type": "module",
-  "description": "mihomo (Clash.Meta) subscription to sing-box outbound fragment converter",
+  "description": "Provably type-safe converter from mihomo (Clash.Meta) subscriptions to sing-box outbound fragments",
+  "keywords": [
+    "mihomo",
+    "clash-meta",
+    "sing-box",
+    "subscription",
+    "converter",
+    "proxy",
+    "type-safe",
+    "effect",
+    "typescript",
+    "nix"
+  ],
   "bin": {
     "hoyofall": "./dist/index.js"
   },

@@ -3,11 +3,11 @@
 [English](./README.md) · **简体中文**
 
 > 把 mihomo（Clash.Meta）订阅持续、原子地转换为 sing-box `outbounds`
-> ——无 Web UI。
+> ——可证明的类型安全。
 
-hoyofall 是一个小巧的无头后台服务：按各自独立的间隔抓取任意数量的 mihomo
-订阅，转换为 sing-box `outbounds`，并将可导入的片段写入磁盘（另可选 HTTP 端点，
-供 GUI 与调试使用）。
+hoyofall 是一个小巧、可证明类型安全的守护进程：按各自独立的间隔抓取任意数量的
+mihomo 订阅，转换为 sing-box `outbounds`，并将可导入的片段写入磁盘（另可选 HTTP
+与 WebUI 控制面，供 GUI 与调试使用）。
 
 为什么必须落盘？sing-box 核心**无法通过 HTTP 导入配置**——它只读取本地文件
 （`-c`）或目录（`-C`）；多配置合并时对象按键覆盖、数组追加，因此片段的
@@ -15,7 +15,7 @@ hoyofall 是一个小巧的无头后台服务：按各自独立的间隔抓取�
 
 ## 亮点
 
-- **函数式且可证明。** 使用 TypeScript 与 [Effect](https://effect.website/)：无
+- **可证明的类型安全。** 使用 TypeScript 与 [Effect](https://effect.website/)：无
   `let`、无循环、无 `try`/`catch`、无 `any`。`pnpm lint` 中的 AST 检查器会在出现
   任何违禁构造时让构建失败，因此整个程序都是纯数据流，所有失败都进入类型化错误通道。
 - **安全内建。** 通过 `urlEnv` 让 token 不落入文件；NixOS 模块与随附 systemd

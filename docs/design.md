@@ -1,8 +1,8 @@
 # Design & guarantees
 
-hoyofall is deliberately small and strict. The goal is a daemon whose behaviour
-is easy to reason about and to verify, with no hidden state and no untyped
-failure paths.
+hoyofall is deliberately small and strict. The goal is a **provably type-safe**
+daemon whose behaviour is easy to reason about and to verify, with no hidden
+state and no untyped failure paths.
 
 ## Functional core
 

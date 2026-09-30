@@ -3,12 +3,12 @@
 **English** · [简体中文](./README.CN.md)
 
 > Turn mihomo (Clash.Meta) subscriptions into sing-box `outbounds` —
-> continuously, atomically, and without a Web UI.
+> continuously, atomically, and provably type-safe.
 
-hoyofall is a small headless daemon. It fetches any number of mihomo
+hoyofall is a small, provably type-safe daemon. It fetches any number of mihomo
 subscriptions on their own intervals, converts them to sing-box `outbounds`, and
-writes an importable fragment to disk (plus an optional HTTP endpoint for GUIs
-and debugging).
+writes an importable fragment to disk (plus optional HTTP and WebUI control
+surfaces for GUIs and debugging).
 
 Why a file? sing-box core **cannot import configuration over HTTP** — it reads
 local files (`-c`) or a directory (`-C`), and when merging, objects override by
@@ -17,7 +17,7 @@ into a base config.
 
 ## Highlights
 
-- **Functional, and provable.** TypeScript on [Effect](https://effect.website/):
+- **Provably type-safe.** TypeScript on [Effect](https://effect.website/):
   no `let`, loops, `try`/`catch`, or `any`. An AST checker in `pnpm lint` fails
   the build on any forbidden construct, so the whole program is pure data flow
   with every failure in a typed error channel.
