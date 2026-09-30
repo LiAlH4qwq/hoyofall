@@ -1,6 +1,7 @@
 # Development
 
-See [`AGENTS.md`](../AGENTS.md) for the full code-style rules (functional AST
+See [`AGENTS.md`](https://github.com/LiAlH4qwq/hoyofall/blob/main/AGENTS.md) for
+the full code-style rules (functional AST
 rules, Effect conventions, boundary typing). In short: no imperative constructs,
 convert into `Effect` at boundaries, no broad `Effect.catchAll`, and never bypass
 the type system.
@@ -37,8 +38,37 @@ nix build .#hoyofall-android   # result/hoyofall-android-arm64.zip
 - `scripts/check-shell.ts` – bans authored bash / POSIX shell scripts
 - `android/webui/` – KernelSU WebUI source; `android/module/` – Magisk/KernelSU
   payload (assembled into the flashable module by `nix/android.nix`)
-- `nix/` – `package.nix`, `overlay.nix`, `android.nix`, NixOS `module.nix`;
-  `flake.nix`
+- `nix/` – `package.nix`, `overlay.nix`, `android.nix`, `github.nix` (generates
+  `.github/`), `website.nix`, NixOS `module.nix`; `flake.nix`
+- `dev/` – the flake-parts `dev` partition: development-only inputs
+  (`github-actions-nix`, `git-hooks`), the git hooks, and the dev shell
+- `docs/` – the English mdBook source; `docs/zh/` – the 简体中文 translation
+
+## CI, workflows and the website
+
+GitHub Actions workflows and `dependabot.yml` are **generated from Nix**, not
+hand-written. `nix/github.nix` declares the workflows with
+[`github-actions-nix`](https://github.com/synapdeck/github-actions-nix) and
+renders dependabot with `yq`; a Nushell app copies the results into `.github/`:
+
+```bash
+nix run .#write-github -- . --stage   # write and `git add` the .github files
+nix run .#check-github -- .           # fail if the committed files are stale
+nix flake check                       # includes the github-up-to-date check
+```
+
+The `dev` flake partition keeps these inputs out of a consumer's lock file.
+`git-hooks.nix` installs a pre-commit hook that runs `write-github` whenever
+`flake.nix`, `flake.lock` or `nix/**` changes, plus `actionlint` and
+`nixfmt-rfc-style`. Hooks are installed on `nix develop`.
+
+The documentation site is an mdBook build of `docs/` (English) and `docs/zh/`
+(中文), assembled by `nix/website.nix` and deployed to GitHub Pages by the
+generated `pages` workflow:
+
+```bash
+nix build .#website     # -> result/{index.html,en/,zh/}
+```
 
 ## Enforced AST rules
 

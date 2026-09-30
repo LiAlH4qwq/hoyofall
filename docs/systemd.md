@@ -3,7 +3,8 @@
 Nix users should use the [NixOS module](./nix.md) instead; it wires all of this
 up declaratively. This page is for everyone else.
 
-Ready-made units live in [`contrib/systemd/`](../contrib/systemd/):
+Ready-made units live in
+[`contrib/systemd/`](https://github.com/LiAlH4qwq/hoyofall/tree/main/contrib/systemd):
 
 | File | Purpose |
 |---|---|

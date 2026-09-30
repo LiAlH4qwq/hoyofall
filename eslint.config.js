@@ -127,4 +127,13 @@ export default tseslint.config(
       },
     },
   },
+  {
+    // Browser globals for the mdBook language-switch assets.
+    files: ["docs/**/theme/*.js"],
+    languageOptions: {
+      globals: {
+        document: "readonly",
+      },
+    },
+  },
 )

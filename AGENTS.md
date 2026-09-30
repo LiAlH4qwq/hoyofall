@@ -1,8 +1,9 @@
 # AGENTS.md
 
-Instructions for agents (and humans) working on **hoyofall**, a headless
-converter from mihomo (Clash.Meta) subscriptions to sing-box `outbounds`
-fragments, written in TypeScript with [Effect](https://effect.website/).
+Instructions for agents (and humans) working on **hoyofall**, a provably
+type-safe converter from mihomo (Clash.Meta) subscriptions to sing-box
+`outbounds` fragments, written in TypeScript with
+[Effect](https://effect.website/).
 
 ## Functional programming (strict)
 
@@ -33,6 +34,16 @@ The Android module is assembled from prebuilt binaries by Nix:
 nix build .#hoyofall-android   # result/hoyofall-android-arm64.zip
 ```
 
+The dev partition (hooks, workflow generation, the docs website) is entered
+with `nix develop`; `.github/` is generated from Nix and never hand-edited:
+
+```
+nix flake check                      # checks, incl. github-up-to-date
+nix run .#write-github -- . --stage  # regenerate .github/ and stage it
+nix run .#check-github -- .          # fail if .github/ is stale
+nix build .#website                  # -> result/{index.html,en/,zh/}
+```
+
 ## Layout
 
 - `src/config/` – configuration `Schema`, loading and validation
@@ -45,8 +56,11 @@ nix build .#hoyofall-android   # result/hoyofall-android-arm64.zip
 - `scripts/check-shell.ts` – bans authored bash / POSIX shell scripts
 - `android/` – Android module: `webui/` source, `module/` (Magisk/KernelSU
   payload); assembled from prebuilt binaries by `nix/android.nix`
-- `nix/` – `package.nix`, `overlay.nix`, `android.nix`, NixOS `module.nix`;
-  `flake.nix`
+- `nix/` – `package.nix`, `overlay.nix`, `android.nix`, `github.nix` (generates
+  `.github/`), `website.nix`, NixOS `module.nix`; `flake.nix`
+- `dev/` – the flake-parts `dev` partition: development-only inputs, the
+  `git-hooks.nix` hook config, and the dev shell
+- `docs/` – English mdBook source; `docs/zh/` – 简体中文; both build to the site
 
 ## Hard rules (enforced by `pnpm lint`)
 
@@ -78,6 +92,27 @@ checker's roots.
 Replace the forbidden constructs with `const`, `Array.map` / `filter` /
 `reduce` / `flatMap`, `Effect.all`, `Effect.try` / `Effect.tryPromise`,
 `Match`, and typed errors.
+
+## CI and the website (hard rule)
+
+`.github/` is **generated from Nix** and must never be hand-edited. The
+workflows are declared with
+[`github-actions-nix`](https://github.com/synapdeck/github-actions-nix) in
+`nix/github.nix`; `dependabot.yml` is rendered from Nix with `yq`. A **Nushell**
+app (`pkgs.writers.writeNuBin`, no bash `cp`) copies the generated files into
+`.github/`:
+
+- `nix run .#write-github -- . --stage` regenerates and stages them;
+- `nix run .#check-github -- .` / `nix flake check` fail when they are stale.
+
+`git-hooks.nix` (in the `dev` partition, installed by `nix develop`) runs
+`write-github` on relevant changes plus `actionlint` and `nixfmt-rfc-style`.
+
+The documentation site is an mdBook build of `docs/` (English) and `docs/zh/`
+(简体中文), assembled by `nix/website.nix` and deployed to GitHub Pages by the
+generated `pages` workflow. The README stays short; long-form docs live in
+`docs/` and on the site. When you add a page, add it to both `SUMMARY.md` files
+and translate it.
 
 ## Shells and scripts (hard rule)
 

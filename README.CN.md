@@ -5,28 +5,20 @@
 > 把 mihomo（Clash.Meta）订阅持续、原子地转换为 sing-box `outbounds`
 > ——可证明的类型安全。
 
-hoyofall 是一个小巧、可证明类型安全的守护进程：按各自独立的间隔抓取任意数量的
-mihomo 订阅，转换为 sing-box `outbounds`，并将可导入的片段写入磁盘（另可选 HTTP
-与 WebUI 控制面，供 GUI 与调试使用）。
+[![CI](https://github.com/LiAlH4qwq/hoyofall/actions/workflows/ci.yml/badge.svg)](https://github.com/LiAlH4qwq/hoyofall/actions/workflows/ci.yml)
+[![Website](https://github.com/LiAlH4qwq/hoyofall/actions/workflows/pages.yml/badge.svg)](https://github.com/LiAlH4qwq/hoyofall/actions/workflows/pages.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
-为什么必须落盘？sing-box 核心**无法通过 HTTP 导入配置**——它只读取本地文件
-（`-c`）或目录（`-C`）；多配置合并时对象按键覆盖、数组追加，因此片段的
-`outbounds` 数组会直接拼进基础配置。
+hoyofall 按各自独立的间隔抓取任意数量的 mihomo 订阅，转换为 sing-box
+`outbounds`，并把可导入的片段写入磁盘（另可选 HTTP 与 WebUI 控制面，供 GUI 与调试
+使用）。它是一个小巧、**可证明类型安全**的守护进程：使用 TypeScript 与
+[Effect](https://effect.website/)，没有 `let`、循环、`try`/`catch` 或 `any`。
+`pnpm lint` 中的 AST 检查器会在出现任何违禁构造时让构建失败，因此整个程序都是纯数据
+流，所有失败都进入类型化错误通道。
 
-## 亮点
+## 安装
 
-- **可证明的类型安全。** 使用 TypeScript 与 [Effect](https://effect.website/)：无
-  `let`、无循环、无 `try`/`catch`、无 `any`。`pnpm lint` 中的 AST 检查器会在出现
-  任何违禁构造时让构建失败，因此整个程序都是纯数据流，所有失败都进入类型化错误通道。
-- **安全内建。** 通过 `urlEnv` 让 token 不落入文件；NixOS 模块与随附 systemd
-  单元以加固的 `DynamicUser` 运行；片段采用 `tmp` + `rename` 原子写入。
-- **声明式 Nix 支持。** flake 提供包、overlay 与 NixOS 模块；模块在构建时用 JSON
-  Schema 校验 `settings`，并可接管向 `services.sing-box` 的注入。
-- **单实例，多订阅。** 每个订阅独立间隔刷新；结果合并，并可选地按正则生成
-  `selector`/`urltest` 组。
-- **随处可跑。** 为非 Nix 用户提供加固的 systemd 单元。
-
-## 快速开始 —— NixOS
+NixOS 模块：
 
 ```nix
 {
@@ -35,113 +27,50 @@ mihomo 订阅，转换为 sing-box `outbounds`，并将可导入的片段写入�
 
   services.hoyofall = {
     enable = true;
-    settings = {
-      subscriptions.default = { urlEnv = "SUB_URL"; };
-      groups.custom = {
-        "hk-auto" = { level = 1; type = "urltest"; includeRegexes = [ "HK" ]; };
-        default = {
-          level = 2;
-          type = "selector";
-          includeProxies = false;
-          includeLevels = [ 1 ];
-          includeDirect = true;
-        };
-      };
-    };
+    settings.subscriptions.default = { urlEnv = "SUB_URL"; };
     environmentFile = "/run/secrets/hoyofall.env";
     singboxIntegration.enable = true;
   };
 }
 ```
 
-模块运行单个 `hoyofall.service`，在构建时用随包 JSON Schema 校验 `settings`，
-并在启用 `singboxIntegration` 时把片段注入 `services.sing-box`、变更后重启它。
-完整选项与注意事项见 [docs/nix.md](./docs/nix.md)（英文）。
-
-## 快速开始 —— systemd（无 Nix）
+包 / 独立部署（`contrib/systemd/` 为非 Nix 用户提供加固单元）：
 
 ```bash
-git clone https://github.com/LiAlH4qwq/hoyofall && cd hoyofall
-pnpm install && pnpm build                 # 产出独立的 dist/index.js
-sudo install -d /etc/hoyofall
-sudo install -m 0755 dist/index.js /usr/local/bin/hoyofall
-sudo install -m 0644 config.example.yaml /etc/hoyofall/config.yaml
-```
-
-将 `output.file.path` 指向 `/var/lib/hoyofall/fragment.json`，再安装
-[`contrib/systemd/hoyofall.service`](./contrib/systemd/hoyofall.service)：
-
-```bash
-sudo install -m 0644 contrib/systemd/hoyofall.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now hoyofall.service
-```
-
-含可选 sing-box 刷新单元的逐步说明见 [docs/systemd.md](./docs/systemd.md)（英文）。
-
-## 仅安装包
-
-```bash
-nix build github:LiAlH4qwq/hoyofall        # ./result/bin/hoyofall
-# 或
+nix build github:LiAlH4qwq/hoyofall      # ./result/bin/hoyofall
 nix profile install github:LiAlH4qwq/hoyofall
 ```
 
-然后直接运行：
+Android（一体化 Magisk/KernelSU 模块，从预编译二进制组装）：
 
 ```bash
-hoyofall --config /etc/hoyofall/config.yaml
-hoyofall --check --config /etc/hoyofall/config.yaml   # 校验后退出
-hoyofall --print-schema          # 打印配置 JSON Schema
-hoyofall --help
+nix build .#hoyofall-android             # result/hoyofall-android-arm64.zip
 ```
-
-## 在 Android 上运行（Magisk / KernelSU / SuKiSU / ReSuKiSU）
-
-hoyofall 以一体化可刷入模块发布：把同一份 `dist/index.js` 跑在预编译的 Android
-Node 上，由 Nushell 守护，**并附带受守护的 sing-box** 与 KernelSU **WebUI**
-（仪表盘、启动/停止、配置编辑、日志）。Nix 从预编译的 Termux aarch64 二进制与
-上游 sing-box 构建组装（全部为固定输出下载）：
-
-```bash
-nix build .#hoyofall-android          # -> result/hoyofall-android-arm64.zip
-```
-
-用 Magisk/KernelSU 刷入该 zip；默认配置无需 token 即可启动。
-从 WebUI 配置订阅与 sing-box——KernelSU/SuKiSU/ReSuKiSU 自带；Magisk 上建议使用
-独立的 [`KsuWebUIStandalone`](https://github.com/5ec1cff/KsuWebUIStandalone) 应用
-——或直接编辑 `/data/adb/hoyofall/`
-（各应用各有子目录：`hoyofall/` 与 `sing-box/`）。
-完整指南见 [docs/android.md](./docs/android.md)；拆分为独立模块的计划见
-[docs/android-future.md](./docs/android-future.md)（英文）。
 
 ## 文档
 
-| 页面 | 内容 |
-|---|---|
-| [Configuration](./docs/configuration.md) | 每个选项、类型与默认值。 |
-| [Usage](./docs/usage.md) | CLI、HTTP 端点、导入 sing-box。 |
-| [Nix](./docs/nix.md) | flake 输出与 NixOS 模块。 |
-| [systemd](./docs/systemd.md) | 不使用 Nix 的运行方式。 |
-| [Android](./docs/android.md) | Magisk/KernelSU 模块（预编译 Node、Nushell 与 sing-box）。 |
-| [Design](./docs/design.md) | 函数式保证及其强制方式。 |
-| [Development](./docs/development.md) | 构建、测试与 AST 规则。 |
+完整文档见 **<https://LiAlH4qwq.github.io/hoyofall/zh/>**
+（[English](https://LiAlH4qwq.github.io/hoyofall/en/)）：
+
+- [配置](https://LiAlH4qwq.github.io/hoyofall/zh/configuration.html)——每个选项、类型与默认值。
+- [使用](https://LiAlH4qwq.github.io/hoyofall/zh/usage.html)——CLI、HTTP 端点、导入 sing-box。
+- [Nix](https://LiAlH4qwq.github.io/hoyofall/zh/nix.html)——flake 输出与 NixOS 模块。
+- [systemd](https://LiAlH4qwq.github.io/hoyofall/zh/systemd.html)——不使用 Nix 的部署方式。
+- [Android](https://LiAlH4qwq.github.io/hoyofall/zh/android.html)——Magisk/KernelSU 模块。
+- [设计与保证](https://LiAlH4qwq.github.io/hoyofall/zh/design.html)——函数式纪律如何被强制执行。
+- [开发](https://LiAlH4qwq.github.io/hoyofall/zh/development.html)——构建、测试与 AST 规则。
 
 ## 支持的转换
 
 代理：`ss`、`vmess`、`vless`、`trojan`、`hysteria`、`hysteria2`、`tuic`、
-`wireguard`、`http`、`socks5`、`anytls`。
-
-分组：由实例级 `groups.custom`（推荐）或订阅内分组，通过正则与类型化成员匹配
-订阅名与实体名生成。native `proxy-groups`（`groups.native.enable`）映射
-`select → selector`、`url-test → urltest`、`fallback → urltest`、
-`load-balance → selector`。
-
-其余类型会作为类型化警告跳过；设置 `onUnsupported: fail` 可让整个订阅失败。
+`wireguard`、`http`、`socks5`、`anytls`。组：来自 `groups.custom` 的正则/类型化
+selector 与 urltest，以及转换后的原生 `proxy-groups`。其余一律作为类型化警告跳过，
+或在 `onUnsupported: fail` 时令订阅失败。
 
 ## 许可证
 
-hoyofall 自身代码为 [MIT](./LICENSE)。Android 模块还会按各自条款再分发第三方
-二进制——其中最显著的是 [GPL-3.0-or-later](./licenses/GPL-3.0-or-later.txt) 的
-sing-box——因此可刷入模块是聚合分发，并非整体以 MIT 重新授权。详见
-[THIRD_PARTY_LICENSES.md](./THIRD_PARTY_LICENSES.md)。
+hoyofall 自身的代码为 [MIT](./LICENSE)。Android 模块还按其自身条款再分发第三方
+二进制——最显著的是
+[GPL-3.0-or-later](https://github.com/LiAlH4qwq/hoyofall/blob/main/licenses/GPL-3.0-or-later.txt)
+的 sing-box——因此可刷入模块是聚合体，而非对 MIT 的重新许可。见
+[THIRD_PARTY_LICENSES.md](https://github.com/LiAlH4qwq/hoyofall/blob/main/THIRD_PARTY_LICENSES.md)。

@@ -1,0 +1,14 @@
+[book]
+title = "hoyofall"
+authors = ["LiAlH4qwq"]
+language = "zh-CN"
+src = "."
+
+[build]
+build-dir = "book"
+
+[output.html]
+site-url = "/hoyofall/zh/"
+git-repository-url = "https://github.com/LiAlH4qwq/hoyofall"
+edit-url-template = "https://github.com/LiAlH4qwq/hoyofall/edit/main/docs/zh/{path}"
+additional-js = ["theme/lang.js"]

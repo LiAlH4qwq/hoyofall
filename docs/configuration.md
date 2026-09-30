@@ -1,8 +1,9 @@
 # Configuration
 
 hoyofall is configured with a single YAML file. Start from
-[`config.example.yaml`](../config.example.yaml) and copy it to `config.yaml`
-(gitignored, so local subscription tokens stay out of version control).
+[`config.example.yaml`](https://github.com/LiAlH4qwq/hoyofall/blob/main/config.example.yaml)
+and copy it to `config.yaml` (gitignored, so local subscription tokens stay out
+of version control).
 
 Every option is documented below with its type and default. The generated JSON
 Schema (`hoyofall --print-schema`, shipped at `share/hoyofall/schema.json`) is

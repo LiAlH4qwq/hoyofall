@@ -15,6 +15,25 @@
       {
         systems = import inputs.systems;
 
+        imports = [
+          # Development tooling (workflow generation, git hooks, the website)
+          # lives in the `dev` partition so it never reaches a consumer's
+          # lock file. See `dev/flake.nix`.
+          inputs.flake-parts.flakeModules.partitions
+          ./nix/website.nix
+        ];
+
+        partitionedAttrs = {
+          devShells = "dev";
+          apps = "dev";
+          checks = "dev";
+        };
+
+        partitions.dev = {
+          extraInputsFlake = ./dev;
+          module.imports = [ ./dev/flake-module.nix ];
+        };
+
         perSystem =
           { config, system, ... }:
           let
@@ -43,15 +62,7 @@
             # build, all fetched as fixed-output derivations.
             packages.hoyofall-android = android.module;
 
-            devShells.default = pkgs.mkShell {
-              packages = [
-                (pkgs.nodejs_26 or pkgs.nodejs)
-                pkgs.pnpm
-                pkgs.check-jsonschema
-              ];
-            };
-
-            formatter = pkgs.nixfmt-rfc-style;
+            formatter = pkgs.nixfmt;
           };
 
         flake.overlays.hoyofall = final: _prev: {

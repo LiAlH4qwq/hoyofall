@@ -56,9 +56,12 @@ nix build .#hoyofall-android
 nixpkgs' `pkgsCross.aarch64-android*` sets are deliberately not used: they are
 uncached and broken when built from source (`compiler-rt`, `tzdata`, …).
 
-`android/` holds the module payload ([`module/`](../android/module/)), the WebUI
-source ([`webui/`](../android/webui/README.md)), and the overview in
-[`../android/README.md`](../android/README.md).
+`android/` holds the module payload
+([`module/`](https://github.com/LiAlH4qwq/hoyofall/tree/main/android/module)),
+the WebUI source
+([`webui/`](https://github.com/LiAlH4qwq/hoyofall/tree/main/android/webui)), and
+the overview in
+[`android/README.md`](https://github.com/LiAlH4qwq/hoyofall/blob/main/android/README.md).
 
 ## Install
 

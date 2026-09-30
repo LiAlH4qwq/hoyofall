@@ -84,5 +84,5 @@ sing-box core cannot import configuration over HTTP. It reads local files
 hoyofall therefore writes the fragment to disk; the optional HTTP endpoint exists
 for GUIs and debugging.
 
-See [`AGENTS.md`](../AGENTS.md) for the normative rules an agent or contributor
-must follow.
+See [`AGENTS.md`](https://github.com/LiAlH4qwq/hoyofall/blob/main/AGENTS.md) for
+the normative rules an agent or contributor must follow.
