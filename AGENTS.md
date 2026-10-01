@@ -116,10 +116,10 @@ and translate it.
 
 ## Shells and scripts (hard rule)
 
-**bash is banned.** Every script this repository authors or ships — build and
-orchestration scripts, CI steps, generated service scripts, and the Android
-module logic — is **Nushell** (`.nu`). Do not add `*.sh`, `*.bash` or `*.bats`
-files, and do not use a bash/POSIX shebang.
+**bash is banned.** Do not add `*.sh`, `*.bash` or `*.bats` files, and do not
+use a bash/POSIX shebang. Authored logic is **TypeScript** (the hoyofall app and
+the Android supervisor) or **Nushell** (dev/orchestration scripts and generated
+systemd units); never shell.
 
 `pnpm lint` runs `scripts/check-shell.ts`, which walks the tree and fails on any
 shell file or `#!/bin/bash` / `#!/bin/sh` shebang outside the allowlist below.
@@ -129,47 +129,47 @@ Two deliberate exceptions:
 - **Android module bootstrap shims.** The Magisk/KernelSU module API executes
   `customize.sh`, `post-fs-data.sh`, `service.sh` and `uninstall.sh` with the
   system shell, so these files are the *only* permitted shell scripts. Their
-  whole body must be a single `exec` of the bundled Nushell (optionally via
-  `/system/bin/env` to hardcode `LD_LIBRARY_PATH` to the module's `lib/`) with
-  the module path hardcoded; no logic, conditionals, or variable expansion.
-  `customize.sh` is the one exception — a single `chmod 0755` restoring the exec
-  bits the module installer strips from `bin/node`, `bin/nu`, `bin/sing-box`
-  and the shims (it uses Magisk's `$MODPATH` for that one command). Everything
-  else lives in the matching `.nu` file.
+  whole body must be a single `exec` of the bundled Node runtime
+  (`bin/node supervisor.js <command>`, optionally via `/system/bin/env` to
+  hardcode `LD_LIBRARY_PATH` to the module's `lib/`) with the module path
+  hardcoded; no logic, conditionals, or variable expansion. `customize.sh` is
+  the one exception — a single `chmod 0755` restoring the exec bits the module
+  installer strips from `bin/node`, `bin/sing-box` and the shims (it uses
+  Magisk's `$MODPATH` for that one command). Everything else lives in
+  `android/supervisor/`.
 - **Nix `stdenv` build phases.** Nix builders run their phases under bash by
-  construction. Keep phase logic minimal and delegate to `nu -c '…'` / `.nu`
-  scripts wherever practical.
-
-Across the rest of the repository, port logic to Nushell rather than writing a
-shell script.
+  construction. Keep phase logic minimal.
 
 ## Android module
 
-`android/` holds the Magisk/KernelSU module payload and the WebUI source. There
-is **no cross-compilation**: the flake assembles the module from prebuilt
-binaries fetched as fixed-output derivations.
+`android/` holds the Magisk/KernelSU module payload, the supervisor and the
+WebUI source. The prebuilt runtimes (Node, sing-box) are fetched as fixed-output
+derivations; see the cross-compilation note under [Nix](#nix).
 
 - `android/module/` – the Magisk-format module: exec-only `.sh` shims (plus the
-  `customize.sh` chmod), `.nu` logic (`services.nu` service specs, `service.nu`
-  supervisor, `control.nu` control protocol, `post-fs-data.nu`,
-  `uninstall.nu`), default configs (hoyofall + sing-box), and the KernelSU
-  `webroot/`.
+  `customize.sh` chmod), the bundled `supervisor.js` (built from
+  `android/supervisor/`), default configs (hoyofall + sing-box), and the
+  KernelSU `webroot/`.
+- `android/supervisor/` – the supervisor, control protocol and boot hooks: a
+  Node + Effect pnpm workspace package bundled by rolldown into
+  `android/module/supervisor.js`. It is enforced by the functional/AST rules
+  (`scripts/check-ast.ts`, ESLint) like `src/`.
 - `android/webui/` – the KernelSU WebUI source (React + Effect + CodeMirror,
   a pnpm workspace package with its own deps), bundled by rolldown into
   `android/module/webroot/app.js`; it controls services and edits config/log
-  only through `control.nu`.
-- `nix/android.nix` – fetches the pinned Termux aarch64 Node/Nushell packages
-  (with their libraries and a CA bundle) and the upstream SagerNet sing-box
-  build, then stages and zips the module.
+  only through the supervisor's `control` command.
+- `nix/android.nix` – fetches the pinned Termux aarch64 Node packages (with
+  their libraries and a CA bundle) and the upstream SagerNet sing-box build,
+  then stages and zips the module.
 
 The module is intentionally **all-in-one** for now; the planned split into
 separate runtime / supervisor / app / WebUI modules, their stable interfaces and
 the migration plan are in [`docs/android-future.md`](./docs/android-future.md)
 (kept current for humans and agents).
 
-Rules: pin every tool version and patch (no floating downloads); scripts are
-Nushell; the module's logic is Nushell with the shim exception above; the
-sing-box integration is configured, never hardcoded to one module layout. See
+Rules: pin every tool version and patch (no floating downloads); authored logic
+is TypeScript (supervisor/WebUI) or Nushell (dev/systemd); the sing-box
+integration is configured, never hardcoded to one module layout. See
 [`docs/android.md`](./docs/android.md).
 
 ## Effect rules

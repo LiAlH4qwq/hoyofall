@@ -1,0 +1,13 @@
+{
+  "name": "hoyofall-supervisor",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "rolldown -c rolldown.config.ts"
+  },
+  "dependencies": {
+    "@effect/platform-node": "^0.108.2",
+    "effect": "^3.22.2",
+    "smol-toml": "^1.4.2"
+  }
+}

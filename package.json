@@ -1,6 +1,6 @@
 {
   "name": "hoyofall",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
   "description": "Provably type-safe converter from mihomo (Clash.Meta) subscriptions to sing-box outbound fragments",
@@ -20,16 +20,18 @@
     "hoyofall": "./dist/index.js"
   },
   "scripts": {
-    "build": "rolldown -c rolldown.config.ts && node dist/index.js --print-schema > dist/schema.json && pnpm run build:webui",
+    "build": "rolldown -c rolldown.config.ts && node dist/index.js --print-schema > dist/schema.json && pnpm run build:webui && pnpm run build:supervisor",
     "build:webui": "rolldown -c android/webui/rolldown.config.ts",
+    "build:supervisor": "rolldown -c android/supervisor/rolldown.config.ts",
     "gen:schema": "tsx scripts/gen-schema.ts",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "typecheck:webui": "tsc --noEmit -p android/webui/tsconfig.json",
+    "typecheck:supervisor": "tsc --noEmit -p android/supervisor/tsconfig.json",
     "check:ast": "tsx scripts/check-ast.ts",
     "lint": "eslint . && tsx scripts/check-ast.ts && tsx scripts/check-shell.ts",
-    "check": "tsc --noEmit && tsc --noEmit -p android/webui/tsconfig.json && eslint . && tsx scripts/check-ast.ts && tsx scripts/check-shell.ts && vitest run",
+    "check": "tsc --noEmit && tsc --noEmit -p android/webui/tsconfig.json && tsc --noEmit -p android/supervisor/tsconfig.json && eslint . && tsx scripts/check-ast.ts && tsx scripts/check-shell.ts && vitest run",
     "test": "vitest run",
     "test:watch": "vitest"
   },

@@ -1,4 +1,4 @@
 id=hoyofall
 name=hoyofall
 author=LiAlH4qwq
-description=Convert mihomo (Clash.Meta) subscriptions into sing-box outbound fragments — headless, atomic, Nushell. Magisk users: open the WebUI with the KsuWebUIStandalone app.
+description=Convert mihomo (Clash.Meta) subscriptions into sing-box outbound fragments — headless, atomic, Node + Effect. Magisk users: open the WebUI with the KsuWebUIStandalone app.

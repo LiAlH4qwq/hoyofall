@@ -24,7 +24,6 @@ let
 
   # Termux `stable` (aarch64), pinned 2026-09.
   nodejsDeb = deb "pool/main/n/nodejs/nodejs_26.4.0-1_aarch64.deb" "sha256-6vPtim5LcuuqjCyzutd4xXfN+eqHypF2EhPYo5QPwJA=";
-  nushellDeb = deb "pool/main/n/nushell/nushell_0.116.0_aarch64.deb" "sha256-E0/2SV1I5Tuv5IKZAaoH2GB0NliTVzOxUfESRY4A93g=";
   libcxxDeb = deb "pool/main/libc/libc++/libc++_30_aarch64.deb" "sha256-U9C4SnunRZAkJXy5TVsTb+E++FhWf2WoBks1lQeZ8so=";
   opensslDeb = deb "pool/main/o/openssl/openssl_1:3.6.3_aarch64.deb" "sha256-hnYOnOc29GMjbywVses6P9z8V3jQ/XB3qRdEjcyQ86o=";
   caresDeb = deb "pool/main/c/c-ares/c-ares_1.34.8_aarch64.deb" "sha256-doH8I+gi15iLqLKt80aPk65o9yTdo2XP8ThQlqn6h+Y=";
@@ -34,10 +33,10 @@ let
   libffiDeb = deb "pool/main/libf/libffi/libffi_3.8.0_aarch64.deb" "sha256-TyVbrfdM0x9qKAHBf6FEQZnITINLUXt8hD4v6evpHXc=";
   caDeb = deb "pool/main/c/ca-certificates/ca-certificates_1:2026.08.13_all.deb" "sha256-jolPuIXac4tMqaeTJwPkFNcw+jLnirozBGp0eCJUfVo=";
 
-  # nodejs pulls its native deps; ca-certificates comes via openssl.
+  # nodejs pulls its native deps; ca-certificates comes via openssl. The extra
+  # libraries stay because pruning them safely needs a device `readelf` check.
   runtimeDebs = [
     nodejsDeb
-    nushellDeb
     libcxxDeb
     opensslDeb
     caresDeb
@@ -117,9 +116,8 @@ in
         done
 
         node=$(find "$TMPDIR/x" -path "*/$prefix/bin/node" -type f | head -n1)
-        nu=$(find "$TMPDIR/x" -path "*/$prefix/bin/nu" -type f | head -n1)
         cert=$(find "$TMPDIR/x" -path "*/$prefix/etc/tls/cert.pem" -type f | head -n1)
-        [[ -n "$node" && -n "$nu" && -n "$cert" ]]
+        [[ -n "$node" && -n "$cert" ]]
 
         mkdir -p "$TMPDIR/prebuilt/lib"
         # Exact SONAMEs the binaries need (see `readelf -d`); dereference symlinks
@@ -142,10 +140,10 @@ in
         chmod -R u+w "$stage"
         mkdir -p "$stage/bin" "$stage/lib"
         cp "$node" "$stage/bin/node"
-        cp "$nu" "$stage/bin/nu"
         cp "$singboxBin" "$stage/bin/sing-box"
         cp ${hoyofall}/lib/hoyofall/index.js "$stage/index.js"
         cp ${hoyofall}/share/hoyofall/schema.json "$stage/schema.json"
+        cp ${hoyofall}/share/hoyofall/supervisor.js "$stage/supervisor.js"
         rm -rf "$stage/webroot"
         cp -a ${hoyofall}/share/hoyofall/webroot "$stage/webroot"
         cp -r ${cleanedSrc}/licenses "$stage/licenses"

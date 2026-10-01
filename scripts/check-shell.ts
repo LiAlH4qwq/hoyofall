@@ -19,7 +19,8 @@ const skippedDirectories = new Set([
 
 // Bash is banned in this repository. The only permitted shell files are the
 // Magisk/KernelSU module bootstrap entrypoints, whose entire body is an `exec`
-// of Nushell. Keep this list in sync with `android/module/`.
+// of the bundled Node runtime (`bin/node supervisor.js <command>`). Keep this
+// list in sync with `android/module/`.
 const allowedShellFiles = new Set([
   "android/module/customize.sh",
   "android/module/post-fs-data.sh",
@@ -60,13 +61,13 @@ const rulesFor = (file: string): ReadonlyArray<string> => {
     .filter((extension) => file.endsWith(extension))
     .map(
       (extension) =>
-        `shell script (${extension}) — bash is banned; author scripts in Nushell (.nu)`,
+        `shell script (${extension}) — bash is banned; author logic in TypeScript (android/supervisor)`,
     )
   if (extensionRules.length > 0) {
     return extensionRules
   }
   return bashShebang.test(firstLine(readFileSync(file, "utf8")))
-    ? ["bash/sh shebang — author scripts in Nushell (.nu)"]
+    ? ["bash/sh shebang — author logic in TypeScript (android/supervisor)"]
     : []
 }
 

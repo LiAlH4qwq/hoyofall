@@ -1,22 +1,22 @@
 # Android（Magisk / KernelSU / SuKiSU / ReSuKiSU）
 
 hoyofall 在 Android 上以**一体化 Magisk 格式模块**形式发布。它在预编译的 Android
-**Node** 上运行与其他平台相同的 `dist/index.js` 产物，用 **Nushell** 驱动自身，并额外
-打包与守护 **sing-box**，全部通过 KernelSU 系 **WebUI** 控制。它可原样安装在
+**Node** 上运行与其他平台相同的 `dist/index.js` 产物，用 **Node + Effect** 应用守护
+自身，并额外打包与守护 **sing-box**，全部通过 KernelSU 系 **WebUI** 控制。它可原样安装在
 Magisk、KernelSU、SuKiSU 与 ReSuKiSU 上——它们共享同一模块格式。
 
 ```
 mihomo 订阅 (HTTPS)
         │  bin/node + index.js                 WebUI (KernelSU ksu.exec)
-        ▼                                            │ control.nu
+        ▼                                            │ supervisor.js control
 /data/adb/hoyofall/hoyofall/out/fragment.json   (原子写)   ▼
-        │  bin/sing-box run -c … -C out   ◄── service.nu 守护进程
+        │  bin/sing-box run -c … -C out   ◄── supervisor.js service
         ▼
    tun / 混合代理
 ```
 
-> 当前模块刻意保持**一体化**。未来的版本会把它拆成互相独立的模块（Node、Nushell、
-> 通用 Nushell 守护进程、hoyofall 应用、sing-box、WebUI）；预期的拆分方式、接口与
+> 当前模块刻意保持**一体化**。未来的版本会把它拆成互相独立的模块（Node、通用
+> Node + Effect 守护进程、hoyofall 应用、sing-box、WebUI）；预期的拆分方式、接口与
 > 迁移注意事项见 [`android-future.md`](./android-future.md)，面向人类与智能体。
 
 ## 为什么用 Node，而不是重写
@@ -34,7 +34,6 @@ Android 目标产出的是 **JNI 应用**，而非 shell 守护进程；而且 `
 | 组件 | 来源 |
 |---|---|
 | Node.js (aarch64) | Termux `nodejs` 包 |
-| Nushell (aarch64) | Termux `nushell` 包 |
 | 运行时库 + CA 证书包 | Termux（`libc++`、`openssl`、`c-ares`、`libicu`、`libsqlite`、`zlib`、`libffi`、`ca-certificates`） |
 | sing-box (arm64) | SagerNet Android 发布版 |
 
@@ -77,43 +76,42 @@ KernelSU WebUI 实现——
 [`KsuWebUIStandalone`](https://github.com/5ec1cff/KsuWebUIStandalone)（在 APatch 上
 同样可用）——再从那里打开 hoyofall。两种方式都没有 Magisk 操作按钮。UI 包含一个
 **仪表盘**、每个服务（hoyofall 与 sing-box）的 **Control / Config / Log** 页面，并
-完全由 `control.nu` 支撑：
+完全由守护进程的 `control` 命令支撑：
 
 - **仪表盘**——各服务的实时状态与启动/停止/重启。
 - **Control**——每个服务的状态（enabled/running/supervisor）与操作。启动/停止会写入/
   删除服务的 `disabled` 标志（例如 `/data/adb/hoyofall/hoyofall/disabled`、
-  `/data/adb/hoyofall/sing-box/disabled`），`service.nu` 中的守护进程会遵循它，因此
-  变更立即生效，无需重启。
-- **Config**——三种由 `control.nu` 支撑的模式：
+  `/data/adb/hoyofall/sing-box/disabled`），守护进程会遵循它，因此变更立即生效，无需
+  重启。
+- **Config**——由守护进程的 `control` 命令支撑：
   - **Form**（仅 hoyofall）：由守护进程所用的同一份 Effect `Config` schema 生成的表单，
     带内联校验与保留注释的 YAML 编辑。
-  - **Nushell**：编辑 `config.nu` 源文档——一个 Nushell 脚本，其最后一个表达式就是
-    配置记录。保存时在设备上渲染（为 YAML/JSON）、校验，然后写入生效配置；渲染或校验
-    失败时运行中的配置不受影响，源文档仍会保存。在这里，函数、循环与 import 能让
-    在手机上编写复杂的组集合变得愉快。
-  - **Raw**：带 YAML/JSON 高亮的原始 CodeMirror 编辑器。
-  所有模式都会对文本做 base64 编码并调用 `control.nu`（Form/Raw 用 `set-config`，
-  Nushell 用 `set-source`，预览用 `render-config`）。
-- **Log**——智能日志视图（行过滤、跟随/自动滚动），通过 `control.nu log <service>`
-  读取最后 300 行。
+  - **Raw**：带 YAML/JSON 高亮的 CodeMirror 编辑器。
+  两者都会对文本做 base64 编码并调用 `set-config`，后者在原子提交前会用服务自身的
+  检查器校验候选配置。
+- **Log**——智能日志视图（行过滤、跟随/自动滚动），通过守护进程的 `log` 动作读取最后
+  300 行。
 
 该应用用 TypeScript/TSX 写在 `android/webui/` 下，并由本仓库的 rolldown 打包为
 `webroot/app.js`（`pnpm build:webui`，属于 `pnpm build` 的一部分）。它是一个 pnpm
 工作区包（`android/webui/package.json`），使用 React、Effect 与 CodeMirror；在那里添加
 更多包，rolldown 会把它们一并打包。
 
+该守护进程与控制面位于 `android/supervisor/`（Node + Effect，是一个 pnpm 工作区包），
+由 rolldown 打包为 `android/module/supervisor.js`（`pnpm build:supervisor`，属于
+`pnpm build` 的一部分）；shim 会 `exec` `bin/node supervisor.js <command>`。
+
 ```bash
-# control.nu 也可直接使用（注意为随附 nu 设置 LD_LIBRARY_PATH）
-su -c '/system/bin/env LD_LIBRARY_PATH=/data/adb/modules/hoyofall/lib /data/adb/modules/hoyofall/bin/nu --no-config-file /data/adb/modules/hoyofall/control.nu status sing-box'
+# 控制协议也可直接使用
+su -c '/system/bin/env LD_LIBRARY_PATH=/data/adb/modules/hoyofall/lib /data/adb/modules/hoyofall/bin/node /data/adb/modules/hoyofall/supervisor.js control status sing-box'
 ```
 
-`control.nu <action> [service]` 的动作：`status`、`start`、`stop`、`restart`、
-`config`、`config-source`、`set-config`（从 `HOYOFALL_CONFIG_B64` 取 base64）、
-`render-config`、`set-source`（从 `HOYOFALL_CONFIG_B64` 取 base64）、`log`；
+`supervisor.js control <action> [service]` 的动作：`status`、`start`、`stop`、
+`restart`、`config`、`set-config`（从 `HOYOFALL_CONFIG_B64` 取 base64）、`log`；
 `service` 为 `hoyofall` 或 `sing-box`（不带 service 的 `status` 会列出两者）。
-`set-config` 与 `set-source` 在提交前会用服务自身的检查器校验候选配置
-（`hoyofall --check`；sing-box 没有独立检查器，因为它的配置会与片段合并）。
-`config.nu` 以 root 运行，与模块中的其他一切相同。
+`set-config` 在提交前会用服务自身的检查器校验候选配置（`hoyofall --check`；sing-box
+没有独立检查器，因为它的配置会与片段合并）。守护进程以 root 运行，与模块中的其他一切
+相同。
 
 ## sing-box
 
@@ -132,7 +130,7 @@ Clash-API 外部 UI 都落在这里。可在 WebUI 的 **sing-box** 标签页启
 `restart_singbox_on_change = false` 可退出该行为），或启用下面的外部监视器来喂给一个
 独立的 sing-box 模块。
 
-若要改为喂给一个*独立*的 sing-box 模块，`service.nu` 还带有一个可选的监视器，会把
+若要改为喂给一个*独立*的 sing-box 模块，守护进程还带有一个可选的监视器，会把
 原子片段复制进那个模块的配置目录，并在变化时运行重载钩子——在
 `/data/adb/hoyofall/android.conf`（TOML）中配置：
 
@@ -152,44 +150,42 @@ watch_interval_seconds = 5
 
 Magisk/KernelSU 模块 API 用系统 shell 执行 `customize.sh`、`post-fs-data.sh`、
 `service.sh` 与 `uninstall.sh`，因此这四个文件是本仓库允许的**唯一** shell 脚本。每个
-文件都以硬编码路径 `exec` 随附的 Nushell，且**没有任何逻辑**（预编译载荷的 `lib/`
-通过 `/system/bin/env` 放进 `LD_LIBRARY_PATH`，因为 shim 在 `service.nu` 能设置它之前
-就运行了 `nu`）：
+文件都以硬编码路径 `exec` 随附的 Node 运行时，且**没有任何逻辑**（预编译载荷的 `lib/`
+通过 `/system/bin/env` 放进 `LD_LIBRARY_PATH`，因为 shim 在守护进程能设置它之前就运行了
+`node`）：
 
 ```sh
 #!/system/bin/sh
-exec /system/bin/env LD_LIBRARY_PATH=/data/adb/modules/hoyofall/lib /data/adb/modules/hoyofall/bin/nu --no-config-file /data/adb/modules/hoyofall/service.nu
+exec /system/bin/env LD_LIBRARY_PATH=/data/adb/modules/hoyofall/lib /data/adb/modules/hoyofall/bin/node /data/adb/modules/hoyofall/supervisor.js service
 ```
 
 `customize.sh` 是唯一的例外：Magisk 安装器会应用默认模块权限（文件 `0644`），在任何
-shim 运行之前就清除了 `bin/node`、`bin/nu` 与 `bin/sing-box` 的执行位，因此
-`customize.sh` 用一条 `chmod` 恢复它：
+shim 运行之前就清除了 `bin/node` 与 `bin/sing-box` 的执行位，因此 `customize.sh` 用一条
+`chmod` 恢复它：
 
 ```sh
 #!/system/bin/sh
 chmod 0755 "$MODPATH"/bin/* "$MODPATH"/*.sh
 ```
 
-所有行为都存在于对应的 `.nu` 文件里。`scripts/check-shell.ts` 恰好把这些文件列入白
-名单；其他任何文件都会被 `pnpm lint` 拒绝。
+所有行为都存在于 `supervisor.js` 对应的子命令里，其源码位于 `android/supervisor/`。
+`scripts/check-shell.ts` 恰好把这些文件列入白名单；其他任何文件都会被 `pnpm lint` 拒绝。
 
 ## 设备上的目录布局
 
 | 路径 | 内容 |
 |---|---|
-| `/data/adb/modules/hoyofall/` | 仅代码：shim、`.nu`（`services.nu`、`control.nu`……）、`bin/node`、`bin/nu`、`bin/sing-box`、`index.js`、`schema.json`、`lib/`、`webroot/`、预置 `config/`。 |
+| `/data/adb/modules/hoyofall/` | 仅代码：shim、`supervisor.js`、`bin/node`、`bin/sing-box`、`index.js`、`schema.json`、`lib/`、`webroot/`、预置 `config/`。 |
 | `/data/adb/hoyofall/` | 全局数据目录。守护设置 `android.conf` 在此；每个应用拥有一个子目录。 |
 | `/data/adb/hoyofall/android.conf` | 守护设置：外部 sing-box 监视器、重启策略、间隔（TOML）。 |
 | `/data/adb/hoyofall/hoyofall/` | hoyofall 数据目录。 |
 | `/data/adb/hoyofall/hoyofall/config.yaml` | hoyofall 配置（首次启动时预置）。 |
-| `/data/adb/hoyofall/hoyofall/config.nu` | 可选的 Nushell 源文档，供 WebUI 的 Nushell 模式使用；渲染为 `config.yaml`。 |
 | `/data/adb/hoyofall/hoyofall/hoyofall.env` | 订阅 token（`urlEnv`）。 |
 | `/data/adb/hoyofall/hoyofall/out/fragment.json` | 原子聚合片段；也是 sing-box 的 `-C` 目录。 |
-| `/data/adb/hoyofall/hoyofall/disabled` | 通过 WebUI/`control.nu` 停止 hoyofall 时存在。 |
+| `/data/adb/hoyofall/hoyofall/disabled` | 通过 WebUI/控制协议停止 hoyofall 时存在。 |
 | `/data/adb/hoyofall/hoyofall/log/hoyofall.log` | hoyofall 的 stdout/stderr。 |
 | `/data/adb/hoyofall/sing-box/` | sing-box 数据目录。 |
 | `/data/adb/hoyofall/sing-box/config.json` | sing-box 配置（预置）。 |
-| `/data/adb/hoyofall/sing-box/config.nu` | 可选的 Nushell 源文档，供 WebUI 的 Nushell 模式使用；渲染为 `config.json`。 |
 | `/data/adb/hoyofall/sing-box/cache/` | sing-box 工作目录（`-D`）：缓存与任何 Clash-API 外部 UI。 |
 | `/data/adb/hoyofall/sing-box/disabled` | sing-box 停止时存在。 |
 | `/data/adb/hoyofall/sing-box/log/sing-box.log` | sing-box 的 stdout/stderr。 |
@@ -200,19 +196,17 @@ chmod 0755 "$MODPATH"/bin/* "$MODPATH"/*.sh
   模块管理器及其下载可信，并优先使用 `hoyofall.env` 中的 `urlEnv` token，而非
   `config.yaml`。
 - HTTPS 使用 Node 的 CA 存储。Nix 构建的模块把 Termux 的 `ca-certificates` 打包为
-  `module/etc/ssl/cert.pem`，`service.nu` 通过 `SSL_CERT_FILE`/
-  `NODE_EXTRA_CA_CERTS` 导出它；额外根证书也可通过 `service.nu` 中的
+  `module/etc/ssl/cert.pem`，守护进程通过 `SSL_CERT_FILE`/
+  `NODE_EXTRA_CA_CERTS` 导出它；额外根证书也可通过
   `SSL_CERT_DIR=/system/etc/security/cacerts` 设置。不要在 shim 中硬编码它们。
-- 模块把 Node 与 Nushell 的共享库打包在 `module/lib/`；shim 把该目录放进
-  `LD_LIBRARY_PATH`。
+- 模块把 Node 的共享库打包在 `module/lib/`；shim 把该目录放进 `LD_LIBRARY_PATH`。
 - 片段采用原子写入（临时文件 + `rename`），因此即便守护进程在写入中途被杀，读取方也
   不会看到不完整的文件。
 
 ## 更新固定版本
 
 `nix build .#hoyofall-android` 在 `nix/android.nix` 中固定预编译二进制：Termux 包
-（`nodejsDeb`、`nushellDeb`、运行时库与 CA 包）以及 `singbox`（上游 SagerNet Android
-发布版）。
+（`nodejsDeb`、运行时库与 CA 包）以及 `singbox`（上游 SagerNet Android 发布版）。
 
 刷新 Termux：在 Termux `stable` aarch64 索引
 （`https://packages.termux.dev/apt/termux-main/dists/stable/main/binary-aarch64/Packages.gz`）
@@ -228,5 +222,5 @@ chmod 0755 "$MODPATH"/bin/* "$MODPATH"/*.sh
 - **片段始终不出现**：确认至少有一个订阅成功；失败的刷新会被记录，并在下一个间隔重试。
 - **sing-box 从不重载**：检查 `android.conf` 中的 `singbox_dir` 与 `singbox_reload`；
   监视器会记录每次注入与钩子的结果。
-- **应用补丁时构建失败**：随附的补丁与固定的 Node/Nushell 版本绑定；请从匹配的 Termux
-  修订重新随附。
+- **应用补丁时构建失败**：随附的补丁与固定的 Node 版本绑定；请从匹配的 Termux 修订
+  重新随附。

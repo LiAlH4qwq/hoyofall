@@ -1,8 +1,8 @@
 # hoyofall Android module settings (TOML).
 #
 # The module seeds this file to /data/adb/hoyofall/android.conf on first boot.
-# It is read by service.nu, which runs the daemon and can inject the fragment
-# into a sing-box module.
+# It is read by the supervisor, which runs the daemons and can inject the
+# fragment into a sing-box module.
 
 # Poll the fragment and, on change, deliver it to sing-box.
 watch_singbox = true

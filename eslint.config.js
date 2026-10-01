@@ -10,12 +10,19 @@ export default tseslint.config(
       "result/**",
       "android/module/webroot/app.js",
       "android/module/webroot/app.js.map",
+      "android/module/supervisor.js",
+      "android/module/supervisor.js.map",
     ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ["src/**/*.ts", "test/**/*.ts", "scripts/**/*.ts"],
+    files: [
+      "src/**/*.ts",
+      "test/**/*.ts",
+      "scripts/**/*.ts",
+      "android/supervisor/src/**/*.ts",
+    ],
     plugins: {
       functional,
     },

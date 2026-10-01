@@ -17,6 +17,10 @@ hoyofall.json
 android/module/webroot/app.js
 android/module/webroot/app.js.map
 
+# Generated supervisor bundle (source lives in android/supervisor/)
+android/module/supervisor.js
+android/module/supervisor.js.map
+
 # mdBook build output (source lives in docs/ and docs/zh/)
 docs/book/
 docs/zh/book/

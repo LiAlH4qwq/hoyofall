@@ -44,23 +44,25 @@ writer does.
 
 ## Shell discipline
 
-Bash is banned. Every script this repository authors or ships is
-[Nushell](https://www.nushell.sh/) (`.nu`): build and orchestration scripts, CI
-steps, generated service scripts, and the Android module logic. `pnpm lint` runs
+Bash is banned. Authored logic is **TypeScript** (the hoyofall app and the
+Android supervisor, run on Node) or [Nushell](https://www.nushell.sh/)
+(`.nu`: dev/orchestration scripts and generated systemd units). `pnpm lint` runs
 `scripts/check-shell.ts`, which fails on any `*.sh` / `*.bash` / `*.bats` file or
 bash/POSIX shebang outside a two-entry allowlist:
 
 - the **Android module bootstrap shims** (`customize.sh`, `post-fs-data.sh`,
   `service.sh`, `uninstall.sh`), which the Magisk/KernelSU module API requires to
-  be shell — each is a single `exec` of the bundled Nushell (optionally via
-  `/system/bin/env` to hardcode `LD_LIBRARY_PATH`), except `customize.sh`, which
-  is a single `chmod 0755` to restore the exec bit the installer strips; and
+  be shell — each is a single `exec` of the bundled Node runtime
+  (`bin/node supervisor.js <command>`, optionally via `/system/bin/env` to
+  hardcode `LD_LIBRARY_PATH`), except `customize.sh`, which is a single
+  `chmod 0755` to restore the exec bit the installer strips; and
 - **Nix `stdenv` build phases**, which run under bash by construction; keep them
-  minimal and delegate to `nu -c` / `.nu`.
+  minimal.
 
-Nushell is not POSIX shell: compose structured data through Nushell's own
-pipelines (`where`, `each`, `reduce`, `get`, `from json`, `to json`, `path
-join`, `path exists`, `hash sha256`), not through external text utilities.
+Nushell (dev/systemd) is not POSIX shell: compose structured data through
+Nushell's own pipelines (`where`, `each`, `reduce`, `get`, `from json`, …), not
+through external text utilities. The Android supervisor instead composes typed
+`Effect`s; see `android/supervisor/`.
 
 ## Secure by construction
 

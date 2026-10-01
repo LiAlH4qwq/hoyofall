@@ -38,7 +38,6 @@
             pkgs.pnpm
             pkgs.check-jsonschema
             pkgs.mdbook
-            pkgs.nushell
             pkgs.actionlint
           ];
         };

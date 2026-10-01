@@ -2,14 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import CodeMirror from "@uiw/react-codemirror"
 import { yaml } from "@codemirror/lang-yaml"
 import { json } from "@codemirror/lang-json"
-import { Effect } from "effect"
 import { parse } from "yaml"
 import {
   SERVICES,
   readConfig,
-  readConfigSource,
   readLog,
-  renderConfigSource,
   restart,
   run,
   start,
@@ -17,7 +14,6 @@ import {
   stop,
   toast,
   writeConfig,
-  writeConfigSource,
   type ServiceName,
   type ServiceStatus,
 } from "./api"
@@ -111,15 +107,13 @@ const Dashboard = ({ onOpen }: { onOpen: (service: ServiceName) => void }) => (
   </div>
 )
 
-type ConfigMode = "form" | "nushell" | "raw"
+type ConfigMode = "form" | "raw"
 
 const MODE_KEY = (service: ServiceName) => `hoyofall.config.mode.${service}`
 
 const readStoredMode = (service: ServiceName): ConfigMode | null => {
   const stored = window.localStorage.getItem(MODE_KEY(service))
-  return stored === "form" || stored === "nushell" || stored === "raw"
-    ? stored
-    : null
+  return stored === "form" || stored === "raw" ? stored : null
 }
 
 const parseYaml = (text: string): unknown => {
@@ -130,42 +124,25 @@ const parseYaml = (text: string): unknown => {
   }
 }
 
-const nushellPlaceholder = (service: ServiceName): string =>
-  service === "sing-box"
-    ? '{ log: { level: "info", timestamp: true }, outbounds: [ { type: "direct", tag: "direct" } ], route: { final: "direct" } }'
-    : '# The final expression is the hoyofall config record.\n{ subscriptions: { default: { name: "default", urlEnv: "HOYOFALL_SUB_URL" } } }'
-
 const ConfigEditor = ({ service }: { service: ServiceName }) => {
   const [mode, setMode] = useState<ConfigMode>(
     () => readStoredMode(service) ?? (service === "hoyofall" ? "form" : "raw"),
   )
   const [raw, setRaw] = useState("")
-  const [source, setSource] = useState("")
   const [value, setValue] = useState<unknown>({})
-  const [preview, setPreview] = useState("")
   const [errors, setErrors] = useState<ReadonlyArray<string>>([])
   const [loaded, setLoaded] = useState(false)
   const [rawDirty, setRawDirty] = useState(false)
-  const [sourceDirty, setSourceDirty] = useState(false)
   const [formDirty, setFormDirty] = useState(false)
-  const initialised = useRef(false)
 
   const load = useCallback(() => {
-    void run(
-      Effect.gen(function* () {
-        const text = yield* readConfig(service)
-        const src = yield* readConfigSource(service)
-        return { text, src }
-      }),
-    ).then(
-      ({ text, src }) => {
+    void run(readConfig(service)).then(
+      (text) => {
         setRaw(text)
         setValue(parseYaml(text) ?? {})
         setRawDirty(false)
         setFormDirty(false)
         setErrors([])
-        setSource(src)
-        setSourceDirty(false)
         setLoaded(true)
       },
       (cause: Error) => toast(`load config failed: ${cause.message}`),
@@ -175,15 +152,6 @@ const ConfigEditor = ({ service }: { service: ServiceName }) => {
   useEffect(() => {
     load()
   }, [load])
-
-  useEffect(() => {
-    if (loaded && !initialised.current) {
-      initialised.current = true
-      if (readStoredMode(service) === null && source !== "") {
-        setMode("nushell")
-      }
-    }
-  }, [loaded, source, service])
 
   const changeMode = useCallback(
     (next: ConfigMode) => {
@@ -220,29 +188,8 @@ const ConfigEditor = ({ service }: { service: ServiceName }) => {
     )
   }, [service, raw, value, load])
 
-  const saveSource = useCallback(() => {
-    void run(writeConfigSource(service, source)).then(
-      () => {
-        toast("rendered and saved")
-        setSourceDirty(false)
-        load()
-      },
-      (cause: Error) => toast(`render failed: ${cause.message}`),
-    )
-  }, [service, source, load])
-
-  const doPreview = useCallback(() => {
-    void run(renderConfigSource(service)).then(
-      (text) => setPreview(text),
-      (cause: Error) => {
-        setPreview("")
-        toast(`preview failed: ${cause.message}`)
-      },
-    )
-  }, [service])
-
   const modes: ReadonlyArray<ConfigMode> =
-    service === "hoyofall" ? ["form", "nushell", "raw"] : ["nushell", "raw"]
+    service === "hoyofall" ? ["form", "raw"] : ["raw"]
 
   return (
     <div className="editor">
@@ -254,7 +201,7 @@ const ConfigEditor = ({ service }: { service: ServiceName }) => {
             className={mode === entry ? "active" : ""}
             onClick={() => changeMode(entry)}
           >
-            {entry === "form" ? "Form" : entry === "nushell" ? "Nushell" : "Raw"}
+            {entry === "form" ? "Form" : "Raw"}
           </button>
         ))}
       </nav>
@@ -287,39 +234,6 @@ const ConfigEditor = ({ service }: { service: ServiceName }) => {
               Reload
             </button>
           </div>
-        </div>
-      ) : null}
-      {loaded && mode === "nushell" ? (
-        <div className="editor">
-          <CodeMirror
-            value={source}
-            height="50vh"
-            placeholder={nushellPlaceholder(service)}
-            onChange={(next) => {
-              setSource(next)
-              setSourceDirty(true)
-            }}
-          />
-          <div className="controls">
-            <span className={sourceDirty ? "badge starting" : "badge"}>
-              {sourceDirty ? "unsaved" : "saved"}
-            </span>
-            <button type="button" onClick={saveSource}>
-              Render &amp; save
-            </button>
-            <button type="button" className="ghost" onClick={doPreview}>
-              Preview
-            </button>
-            <button type="button" className="ghost" onClick={load}>
-              Reload
-            </button>
-          </div>
-          {preview !== "" ? <pre className="preview">{preview}</pre> : null}
-          <p className="hint">
-            A Nushell script whose final expression is the config record. It is
-            rendered to {service === "sing-box" ? "JSON" : "YAML"}, validated,
-            then written.
-          </p>
         </div>
       ) : null}
       {loaded && mode === "raw" ? (

@@ -35,22 +35,22 @@ TypeScript 编译器 API 解析 `src/`、`test/` 与 `scripts/` 的 AST，并在
 
 ## Shell 纪律
 
-Bash 被禁止。本仓库编写或随附的每个脚本都是 [Nushell](https://www.nushell.sh/)
-（`.nu`）：构建与编排脚本、CI 步骤、生成的服务脚本，以及 Android 模块逻辑。
-`pnpm lint` 会运行 `scripts/check-shell.ts`，在任何 `*.sh` / `*.bash` / `*.bats`
-文件或 bash/POSIX shebang 出现在两处白名单之外时失败：
+Bash 被禁止。编写的逻辑是 **TypeScript**（hoyofall 应用与 Android supervisor，
+运行于 Node），或 [Nushell](https://www.nushell.sh/)（`.nu`：开发/编排脚本与生成的
+systemd 单元）。`pnpm lint` 会运行 `scripts/check-shell.ts`，在任何
+`*.sh` / `*.bash` / `*.bats` 文件或 bash/POSIX shebang 出现在两处白名单之外时失败：
 
 - **Android 模块引导 shim**（`customize.sh`、`post-fs-data.sh`、`service.sh`、
   `uninstall.sh`）——Magisk/KernelSU 模块 API 要求它们必须是 shell；除
-  `customize.sh` 外，每个文件都是一次对随附 Nushell 的 `exec`（可选经由
-  `/system/bin/env` 硬编码 `LD_LIBRARY_PATH`），而 `customize.sh` 则是一条
-  `chmod 0755`，用于恢复安装器剥掉的执行位；以及
-- **Nix `stdenv` 构建阶段**——它们按构造运行于 bash；请保持其精简，并尽量委托给
-  `nu -c` / `.nu`。
+  `customize.sh` 外，每个文件都是一次对随附 Node 运行时的 `exec`
+  （`bin/node supervisor.js <command>`，可选经由 `/system/bin/env` 硬编码
+  `LD_LIBRARY_PATH`），而 `customize.sh` 则是一条 `chmod 0755`，用于恢复安装器剥掉的
+  执行位；以及
+- **Nix `stdenv` 构建阶段**——它们按构造运行于 bash；请保持其精简。
 
-Nushell 不是 POSIX shell：应通过 Nushell 自己的管道组合结构化数据（`where`、
-`each`、`reduce`、`get`、`from json`、`to json`、`path join`、`path exists`、
-`hash sha256`），而不是借助外部文本工具。
+Nushell（开发/systemd）不是 POSIX shell：应通过 Nushell 自己的管道组合结构化数据
+（`where`、`each`、`reduce`、`get`、`from json` 等），而不是借助外部文本工具。
+Android supervisor 则组合带类型的 `Effect`（见 `android/supervisor/`）。
 
 ## 安全内建
 

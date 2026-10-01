@@ -2,10 +2,10 @@ import { Effect, Schema } from "effect"
 import { exec } from "./ksu"
 
 export const MODULE = "/data/adb/modules/hoyofall"
-const CONTROL = `${MODULE}/control.nu`
-const NU = `${MODULE}/bin/nu`
+const SUPERVISOR = `${MODULE}/supervisor.js`
+const NODE = `${MODULE}/bin/node`
 
-// `control.nu` shells out to pgrep/kill; make sure they resolve even if the
+// The supervisor shells out to pgrep/kill; make sure they resolve even if the
 // WebUI exec passes a bare environment.
 const BASE_ENV: Record<string, string> = {
   LD_LIBRARY_PATH: `${MODULE}/lib`,
@@ -32,11 +32,11 @@ export const control = (
   args: string,
   env: Record<string, string> = {},
 ): Effect.Effect<string, Error> =>
-  exec(`${NU} --no-config-file ${CONTROL} ${args}`, { ...BASE_ENV, ...env }).pipe(
+  exec(`${NODE} ${SUPERVISOR} control ${args}`, { ...BASE_ENV, ...env }).pipe(
     Effect.flatMap((result) =>
       result.errno === 0
         ? Effect.succeed(result.stdout)
-        : Effect.fail(new Error(result.stderr.trim() || `control.nu exited ${result.errno}`)),
+        : Effect.fail(new Error(result.stderr.trim() || `control exited ${result.errno}`)),
     ),
   )
 
@@ -69,15 +69,9 @@ export const start = (service: ServiceName) => control(`start ${service}`)
 export const stop = (service: ServiceName) => control(`stop ${service}`)
 export const restart = (service: ServiceName) => control(`restart ${service}`)
 export const readConfig = (service: ServiceName) => control(`config ${service}`)
-export const readConfigSource = (service: ServiceName) =>
-  control(`config-source ${service}`)
-export const renderConfigSource = (service: ServiceName) =>
-  control(`render-config ${service}`)
 export const readLog = (service: ServiceName) => control(`log ${service}`)
 export const writeConfig = (service: ServiceName, content: string) =>
   control(`set-config ${service}`, { HOYOFALL_CONFIG_B64: toBase64(content) })
-export const writeConfigSource = (service: ServiceName, content: string) =>
-  control(`set-source ${service}`, { HOYOFALL_CONFIG_B64: toBase64(content) })
 
 export const toast = (message: string): void => {
   window.ksu?.toast?.(message)

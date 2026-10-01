@@ -11,8 +11,8 @@ dependencies; `pnpm install` at the repository root installs them.
 | File | Role |
 |---|---|
 | `src/main.tsx` | Entry point: mounts `<App />` into `#root`. |
-| `src/App.tsx` | The UI: a **Dashboard** plus a **Control / Config / Log** page per service; Config has **Form / Nushell / Raw** modes. |
-| `src/api.ts` | Typed `Effect` wrappers over the module's `control.nu` actions. |
+| `src/App.tsx` | The UI: a **Dashboard** plus a **Control / Config / Log** page per service; Config has **Form / Raw** modes. |
+| `src/api.ts` | Typed `Effect` wrappers over the supervisor's `control` actions. |
 | `src/ksu.ts` | The KernelSU WebUI bridge (`window.ksu.exec`) as an `Effect`. |
 | `src/schemaForm.tsx` | Generic, recursive form renderer over a JSON Schema (objects, records, arrays, enums, unions). |
 | `src/fieldMeta.ts` | Labels/help for form fields (the JSON Schema has no titles). |
@@ -21,7 +21,7 @@ dependencies; `pnpm install` at the repository root installs them.
 | `rolldown.config.ts` | Outputs an IIFE bundle to `../module/webroot/app.js`. |
 | `tsconfig.json` | Typechecks the WebUI (`pnpm typecheck:webui`). |
 
-It calls the module's `control.nu` through the KernelSU WebUI API with
+It calls the module's supervisor `control` command through the KernelSU WebUI API with
 `LD_LIBRARY_PATH` set to the module's `lib/`. On KernelSU / SuKiSU / ReSuKiSU it
 opens from the module page; on Magisk (and APatch) use the standalone
 [`KsuWebUIStandalone`](https://github.com/5ec1cff/KsuWebUIStandalone) app.

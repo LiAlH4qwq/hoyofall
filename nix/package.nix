@@ -84,8 +84,10 @@ stdenv.mkDerivation (finalAttrs: {
       cp dist/index.js.map $out/lib/hoyofall/index.js.map
     fi
     cp dist/schema.json $out/share/hoyofall/schema.json
-    # KernelSU module WebUI, bundled by `pnpm build` (android/webui -> webroot).
+    # KernelSU module WebUI and the Node + Effect supervisor, both bundled by
+    # `pnpm build` (android/webui -> webroot, android/supervisor -> supervisor.js).
     cp -r android/module/webroot $out/share/hoyofall/webroot
+    cp android/module/supervisor.js $out/share/hoyofall/supervisor.js
 
     makeWrapper ${lib.getExe' nodejs "node"} $out/bin/hoyofall \
       --add-flags "$out/lib/hoyofall/index.js"

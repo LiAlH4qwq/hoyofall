@@ -1,5 +1,6 @@
 packages:
   - android/webui
+  - android/supervisor
 
 minimumReleaseAge: 0
 allowBuilds:

@@ -10,7 +10,7 @@ interface Violation {
   readonly snippet: string
 }
 
-const roots = ["src", "test", "scripts"]
+const roots = ["src", "test", "scripts", "android/supervisor/src"]
 
 const collectTypeScriptFiles = (directory: string): ReadonlyArray<string> =>
   readdirSync(directory).flatMap((entry) => {

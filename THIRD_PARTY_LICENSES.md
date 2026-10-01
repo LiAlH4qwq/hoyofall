@@ -19,7 +19,6 @@ relicensed under MIT. In particular, the bundled **sing-box** is
 |---|---|---|---|
 | sing-box | `bin/sing-box` | GPL-3.0-or-later | <https://github.com/SagerNet/sing-box> (v1.14.2) |
 | Node.js | `bin/node`, `lib/*` | MIT | <https://github.com/nodejs/node> (26.4.0, Termux build) |
-| Nushell | `bin/nu`, `lib/*` | MIT | <https://github.com/nushell/nushell> (0.116.0, Termux build) |
 | libc++ | `lib/libc++_shared.so` | Apache-2.0 WITH LLVM-exception | <https://libcxx.llvm.org/> |
 | OpenSSL | `lib/libcrypto.so.3`, `lib/libssl.so.3` | Apache-2.0 | <https://www.openssl.org/> |
 | c-ares | `lib/libcares.so` | MIT | <https://c-ares.org/> |
@@ -29,11 +28,11 @@ relicensed under MIT. In particular, the bundled **sing-box** is
 | libffi | `lib/libffi.so` | MIT | <https://sourceware.org/libffi/> |
 | CA certificates | `etc/ssl/cert.pem` | MPL-2.0 (Debian `ca-certificates`) | <https://salsa.debian.org/debian/ca-certificates> |
 | KernelSU WebUI bundle | `webroot/app.js` | MIT | React, react-dom, Effect, CodeMirror, `@uiw/react-codemirror` |
+| Supervisor bundle | `supervisor.js` | MIT | Effect, `@effect/platform-node`, `smol-toml` |
 
-The Termux-built Node.js and Nushell binaries are taken from the Termux
-aarch64 packages pinned in `nix/android.nix`. The Nix package
-`packages.<system>.hoyofall` bundles only hoyofall (MIT) and the MIT-licensed
-WebUI dependencies.
+The Termux-built Node.js binary is taken from the Termux aarch64 package pinned
+in `nix/android.nix`. The Nix package `packages.<system>.hoyofall` bundles only
+hoyofall (MIT) and the MIT-licensed WebUI/supervisor dependencies.
 
 ## GNU GPL-3.0-or-later — sing-box
 
@@ -86,7 +85,6 @@ and its SHA-256 are recorded in that file.
 ### MIT components — copyright notices
 
 - **Node.js** — Copyright Node.js contributors. All rights reserved.
-- **Nushell** — Copyright (c) 2019 Nushell contributors.
 - **c-ares** — Copyright (c) 1998 Massachusetts Institute of Technology;
   Copyright (c) 2007-2024 Daniel Stenberg.
 - **libffi** — Copyright (c) 1996-2014 Anthony Green, Red Hat, Inc and others.
