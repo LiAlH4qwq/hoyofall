@@ -243,8 +243,9 @@ files; anything else is rejected by `pnpm lint`.
 `nix build .#hoyofall-android` pins prebuilt binaries in `nix/android.nix`: the
 Termux packages (`nodejsDeb`, the runtime libraries, and the CA bundle) and
 `singbox` (the upstream SagerNet Android release). `tsnix` is not pinned by
-hash: it is built from the `tsnix` flake input (`nix/tsnix-android.nix`), so
-refreshing it means updating the `flake.lock` input (`nix flake update tsnix`).
+hash: it is built from the `tsnix` flake input (`nix/tsnix-android.nix`), which
+lives in the `dev` partition, so refreshing it means
+`nix flake update --flake ./dev tsnix`.
 
 To refresh Termux: look up the current `Version`, `Filename` and `SHA256` in the
 Termux `stable` aarch64 index

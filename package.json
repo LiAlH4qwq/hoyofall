@@ -1,6 +1,6 @@
 {
   "name": "hoyofall",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "private": true,
   "type": "module",
   "description": "Provably type-safe converter from mihomo (Clash.Meta) subscriptions to sing-box outbound fragments",

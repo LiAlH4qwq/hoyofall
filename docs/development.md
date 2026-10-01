@@ -41,7 +41,7 @@ nix build .#hoyofall-android   # result/hoyofall-android-arm64.zip
 - `nix/` – `package.nix`, `overlay.nix`, `android.nix`, `github.nix` (generates
   `.github/`), `website.nix`, NixOS `module.nix`; `flake.nix`
 - `dev/` – the flake-parts `dev` partition: development-only inputs
-  (`github-actions-nix`, `git-hooks`), the git hooks, and the dev shell
+  (`github-actions-nix`, `git-hooks`, `tsnix`), the git hooks, and the dev shell
 - `docs/` – the English mdBook source; `docs/zh/` – the 简体中文 translation
 
 ## CI, workflows and the website

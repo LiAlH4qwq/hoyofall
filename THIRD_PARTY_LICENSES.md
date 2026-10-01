@@ -75,10 +75,10 @@ and its SHA-256 are recorded in that file.
 ## GNU GPL-3.0-only — tsnix
 
 The Android module bundles a **tsnix** binary cross-compiled from source (the
-`tsnix` flake input pinned in `flake.lock`, built by `nix/tsnix-android.nix`).
+`tsnix` flake input pinned in `dev/flake.lock`, built by `nix/tsnix-android.nix`).
 tsnix is GPL-3.0-only, inherited from its `snix-eval` dependency. The
 corresponding source is published at <https://github.com/lialh4qwq/tsnix> at the
-revision recorded in `flake.lock`; the full GNU GPL-3.0 text ships as
+revision recorded in `dev/flake.lock`; the full GNU GPL-3.0 text ships as
 [`licenses/GPL-3.0-or-later.txt`](./licenses/GPL-3.0-or-later.txt).
 
 ## Other license texts

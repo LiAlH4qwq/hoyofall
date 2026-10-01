@@ -58,8 +58,9 @@ nix build .#website                  # -> result/{index.html,en/,zh/}
   payload); assembled from prebuilt binaries by `nix/android.nix`
 - `nix/` – `package.nix`, `overlay.nix`, `android.nix`, `github.nix` (generates
   `.github/`), `website.nix`, NixOS `module.nix`; `flake.nix`
-- `dev/` – the flake-parts `dev` partition: development-only inputs, the
-  `git-hooks.nix` hook config, and the dev shell
+- `dev/` – the flake-parts `dev` partition: development-only inputs
+  (`github-actions-nix`, `git-hooks`, `tsnix`), the `git-hooks.nix` hook config,
+  and the dev shell
 - `docs/` – English mdBook source; `docs/zh/` – 简体中文; both build to the site
 
 ## Hard rules (enforced by `pnpm lint`)
@@ -294,6 +295,9 @@ No pre-release suffixes are used. The Android `versionCode` is derived as
   `tsnix` is cross-compiled for Android bionic by `nix/tsnix-android.nix` using
   nixpkgs' `pkgsCross.aarch64-android-prebuilt`; there is no blanket no-cross
   rule — cross-build a piece when it shrinks the module and the toolchain works.
+  The `tsnix` flake input lives in the `dev` partition (`dev/flake.nix`); the
+  root flake reads it back lazily through `config.partitions.dev.extraInputs`,
+  so it stays out of a consumer's `flake.lock`.
 - `nix/package.nix` builds with pnpm + rolldown. The pnpm store format changes
   between pnpm majors, so `flake.nix` pins `pnpm_12` and the dependency hash
   lives in a per-system `pnpmDepsHashes` map (with a `default`); refresh it when

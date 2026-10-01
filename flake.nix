@@ -6,13 +6,6 @@
     flake-parts.url = "github:hercules-ci/flake-parts";
     flake-parts.inputs.nixpkgs-lib.follows = "nixpkgs";
     systems.url = "github:nix-systems/default";
-
-    # tsnix evaluates Nix expressions to JSON with no store; it powers the
-    # Android WebUI's Nix config mode. Built for Android (bionic) from source.
-    tsnix = {
-      url = "github:lialh4qwq/tsnix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
   };
 
   outputs =
@@ -24,6 +17,13 @@
         inputs,
         ...
       }:
+      let
+        # tsnix is a development input (it lives in the `dev` partition, not in
+        # a consumer's lock file). Its flake is reached through the partition
+        # inputs, lazily, so building `hoyofall` never fetches it. `config` is
+        # shadowed by the `perSystem` argument below, hence the alias.
+        devInputs = config.partitions.dev.extraInputs;
+      in
       {
         systems = import inputs.systems;
 
@@ -61,7 +61,7 @@
             tsnixAndroid = import ./nix/tsnix-android.nix {
               inherit system;
               nixpkgs = inputs.nixpkgs;
-              tsnixSrc = inputs.tsnix.outPath;
+              tsnixSrc = devInputs.tsnix.outPath;
             };
 
             android = import ./nix/android.nix {

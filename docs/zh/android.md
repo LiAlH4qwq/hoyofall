@@ -216,8 +216,8 @@ chmod 0755 "$MODPATH"/bin/* "$MODPATH"/*.sh
 
 `nix build .#hoyofall-android` 在 `nix/android.nix` 中固定预编译二进制：Termux 包
 （`nodejsDeb`、运行时库与 CA 包）以及 `singbox`（上游 SagerNet Android 发布版）。
-`tsnix` 不以哈希固定：它由 `tsnix` flake input 构建（`nix/tsnix-android.nix`），因此刷新
-它意味着更新 `flake.lock` 中的该 input（`nix flake update tsnix`）。
+`tsnix` 不以哈希固定：它由 `tsnix` flake input 构建（`nix/tsnix-android.nix`），该 input
+位于 `dev` 分区，因此刷新它意味着运行 `nix flake update --flake ./dev tsnix`。
 
 刷新 Termux：在 Termux `stable` aarch64 索引
 （`https://packages.termux.dev/apt/termux-main/dists/stable/main/binary-aarch64/Packages.gz`）
