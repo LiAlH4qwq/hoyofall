@@ -8,6 +8,7 @@
   "dependencies": {
     "@effect/platform-node": "^0.108.2",
     "effect": "^3.22.2",
-    "smol-toml": "^1.4.2"
+    "smol-toml": "^1.4.2",
+    "yaml": "^2.8.1"
   }
 }

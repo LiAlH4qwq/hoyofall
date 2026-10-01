@@ -6,12 +6,24 @@
     flake-parts.url = "github:hercules-ci/flake-parts";
     flake-parts.inputs.nixpkgs-lib.follows = "nixpkgs";
     systems.url = "github:nix-systems/default";
+
+    # tsnix evaluates Nix expressions to JSON with no store; it powers the
+    # Android WebUI's Nix config mode. Built for Android (bionic) from source.
+    tsnix = {
+      url = "github:lialh4qwq/tsnix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
     inputs@{ flake-parts, ... }:
     flake-parts.lib.mkFlake { inherit inputs; } (
-      { config, withSystem, ... }:
+      {
+        config,
+        withSystem,
+        inputs,
+        ...
+      }:
       {
         systems = import inputs.systems;
 
@@ -46,8 +58,14 @@
               pnpm = pkgs.pnpm_12 or pkgs.pnpm;
             };
 
+            tsnixAndroid = import ./nix/tsnix-android.nix {
+              inherit system;
+              nixpkgs = inputs.nixpkgs;
+              tsnixSrc = inputs.tsnix.outPath;
+            };
+
             android = import ./nix/android.nix {
-              inherit pkgs hoyofall;
+              inherit pkgs hoyofall tsnixAndroid;
               inherit (pkgs) lib;
               src = ./.;
             };
@@ -56,6 +74,10 @@
             packages.hoyofall = hoyofall;
 
             packages.default = config.packages.hoyofall;
+
+            # tsnix cross-compiled for Android (arm64); staged into the module
+            # as bin/tsnix by nix/android.nix.
+            packages.tsnix-android = tsnixAndroid;
 
             # Android (arm64): the flashable module assembled by nix/android.nix
             # from prebuilt Termux aarch64 binaries and the upstream sing-box

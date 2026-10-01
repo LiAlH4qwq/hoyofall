@@ -20,7 +20,7 @@ let
   # pnpm major changes, since its store format is not stable across majors (we
   # pin pnpm to a major in flake.nix for exactly this reason).
   pnpmDepsHashes = {
-    default = "sha256-tTzJaxhjtuIPOHleNjdCF/QlhhC6vuaYgavHcLg6zOA=";
+    default = "sha256-BezhWar7w+CcLo97KpkEPH8UACTcr4lxY2opxoaOKXA=";
     # x86_64-linux = "sha256-…";
     # aarch64-linux = "sha256-…";
     # x86_64-darwin = "sha256-…";

@@ -10,6 +10,7 @@ import {
   writeText,
 } from "./files"
 import { runCommand } from "./process"
+import { renderSource } from "./render"
 import {
   parseServiceName,
   serviceNames,
@@ -166,6 +167,35 @@ export const control = (
         }
         return
       }
+      case "config-source": {
+        const name = yield* requireService(rawService)
+        const spec = serviceSpec(name)
+        const text = yield* readTextOption(spec.source)
+        if (text !== null) {
+          yield* print(text)
+        }
+        return
+      }
+      case "render-config": {
+        const name = yield* requireService(rawService)
+        const spec = serviceSpec(name)
+        const rendered = yield* renderSource(spec)
+        yield* print(`${rendered}\n`)
+        return
+      }
+      case "set-source": {
+        const name = yield* requireService(rawService)
+        const spec = serviceSpec(name)
+        const text = yield* readBase64Env("set-source")
+        // Save the source first so edits are never lost, then render + validate
+        // before replacing the live config; a failure leaves it untouched.
+        yield* commitConfig(spec.source, text)
+        const rendered = yield* renderSource(spec)
+        yield* validateConfig(spec, rendered)
+        yield* commitConfig(spec.config, rendered)
+        yield* print("ok\n")
+        return
+      }
       case "set-config": {
         const name = yield* requireService(rawService)
         const spec = serviceSpec(name)
@@ -185,7 +215,7 @@ export const control = (
       default: {
         return yield* Effect.fail(
           new UsageError({
-            message: `unknown action (${action}): status|start|stop|restart|config|set-config|log`,
+            message: `unknown action (${action}): status|start|stop|restart|config|config-source|set-config|render-config|set-source|log`,
           }),
         )
       }

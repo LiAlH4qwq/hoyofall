@@ -1,16 +1,17 @@
 # Android integration for the flake.
 #
 # The all-in-one flashable module is assembled from **prebuilt binaries**:
-# Termux aarch64 packages (Node, Nushell, their libraries and a CA bundle) plus
-# the upstream SagerNet sing-box Android build. Every download is a
-# fixed-output derivation, so it happens before the build and the build phases
-# run offline. There is no cross-compilation here: no NDK or Rust toolchain is
-# involved.
+# Termux aarch64 packages (Node, its libraries and a CA bundle) plus the
+# upstream SagerNet sing-box Android build. Every download is a fixed-output
+# derivation, so it happens before the build and the build phases run offline.
+# tsnix is the one source-built piece: nix/tsnix-android.nix cross-compiles it
+# against Android bionic (see that file).
 {
   pkgs,
   lib,
   src,
   hoyofall,
+  tsnixAndroid,
 }:
 
 let
@@ -95,6 +96,7 @@ in
           license = with lib.licenses; [
             mit
             gpl3Plus
+            gpl3Only
             asl20
             mpl20
             llvm-exception
@@ -141,6 +143,7 @@ in
         mkdir -p "$stage/bin" "$stage/lib"
         cp "$node" "$stage/bin/node"
         cp "$singboxBin" "$stage/bin/sing-box"
+        cp "${tsnixAndroid}/bin/tsnix" "$stage/bin/tsnix"
         cp ${hoyofall}/lib/hoyofall/index.js "$stage/index.js"
         cp ${hoyofall}/share/hoyofall/schema.json "$stage/schema.json"
         cp ${hoyofall}/share/hoyofall/supervisor.js "$stage/supervisor.js"

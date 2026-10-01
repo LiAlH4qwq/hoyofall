@@ -11,13 +11,15 @@ licenses, listed below. Full license texts are in [`licenses/`](./licenses/).
 Redistribution of the flashable Android module is therefore an aggregate of
 MIT-licensed hoyofall code and the third-party components below; it is **not**
 relicensed under MIT. In particular, the bundled **sing-box** is
-**GPL-3.0-or-later**, a strong copyleft license.
+**GPL-3.0-or-later** and the bundled **tsnix** is **GPL-3.0-only**, both strong
+copyleft licenses.
 
 ## Bundled at runtime (Android module / Nix android output)
 
 | Component | File(s) | License | Upstream |
 |---|---|---|---|
 | sing-box | `bin/sing-box` | GPL-3.0-or-later | <https://github.com/SagerNet/sing-box> (v1.14.2) |
+| tsnix | `bin/tsnix` | GPL-3.0-only | <https://github.com/lialh4qwq/tsnix> (cross-built from source) |
 | Node.js | `bin/node`, `lib/*` | MIT | <https://github.com/nodejs/node> (26.4.0, Termux build) |
 | libc++ | `lib/libc++_shared.so` | Apache-2.0 WITH LLVM-exception | <https://libcxx.llvm.org/> |
 | OpenSSL | `lib/libcrypto.so.3`, `lib/libssl.so.3` | Apache-2.0 | <https://www.openssl.org/> |
@@ -69,6 +71,15 @@ The corresponding source of the bundled version is published upstream at the
 tag pinned in `nix/android.nix`:
 <https://github.com/SagerNet/sing-box/tree/v1.14.2>. The exact pinned tarball
 and its SHA-256 are recorded in that file.
+
+## GNU GPL-3.0-only — tsnix
+
+The Android module bundles a **tsnix** binary cross-compiled from source (the
+`tsnix` flake input pinned in `flake.lock`, built by `nix/tsnix-android.nix`).
+tsnix is GPL-3.0-only, inherited from its `snix-eval` dependency. The
+corresponding source is published at <https://github.com/lialh4qwq/tsnix> at the
+revision recorded in `flake.lock`; the full GNU GPL-3.0 text ships as
+[`licenses/GPL-3.0-or-later.txt`](./licenses/GPL-3.0-or-later.txt).
 
 ## Other license texts
 

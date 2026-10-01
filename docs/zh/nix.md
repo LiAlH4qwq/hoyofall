@@ -92,15 +92,16 @@ NixOS 模块只运行一个 `hoyofall.service`。程序本身是单实例的，�
 ## Android
 
 `nix/android.nix` 从**预编译二进制**组装可刷入的一体化模块——Termux aarch64 的
-Node/Nushell 及其共享库，加上上游 sing-box Android 构建——全部作为 fixed-output
-derivation 抓取，并在 derivation 内直接分阶段打包/压缩：
+Node 及其共享库，加上上游 sing-box Android 构建——作为 fixed-output derivation 抓取，
+再加一个交叉编译的 `tsnix`，并在 derivation 内直接分阶段打包/压缩：
 
 ```bash
 nix build .#hoyofall-android   # result/{module,hoyofall-android-arm64.zip}
 ```
 
-nixpkgs 的 `pkgsCross.aarch64-android*` 合集被刻意弃用：它们未缓存，且从源码构建时
-是坏的（compiler-rt、tzdata……）。每个 Termux 包都是一次 fixed-output 下载，因此
+`tsnix` 由 `nix/tsnix-android.nix` 使用 nixpkgs 的
+`pkgsCross.aarch64-android-prebuilt`（配合 NDK）从源码为 Android bionic 构建；模块其余
+部分都是 fixed-output 下载，因此抓取后构建可离线运行；
 抓取完成后构建可离线进行；版本/哈希固定在 `nix/android.nix`。完整指南见
 [android.md](./android.md)。
 

@@ -89,7 +89,8 @@ Use `const`, `Array.map` / `filter` / `reduce` / `flatMap`, `Effect.all`,
 
 ## Shell rule
 
-Bash is banned; authored scripts are Nushell. `pnpm lint` also runs
+Bash is banned; authored logic is TypeScript (the app, the Android supervisor)
+or Nushell (dev/orchestration scripts and generated systemd units). `pnpm lint` also runs
 `scripts/check-shell.ts`, which fails on any `.sh` / `.bash` / `.bats` file or
 bash/POSIX shebang outside the allowlist. The only exceptions are the exec-only
 Android module shims (see [`android.md`](./android.md#shims)) and Nix `stdenv`

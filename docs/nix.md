@@ -96,18 +96,18 @@ enough.
 ## Android
 
 `nix/android.nix` assembles the flashable all-in-one module from **prebuilt
-binaries** — Termux aarch64 Node/Nushell and their shared libraries, plus the
-upstream sing-box Android build — fetched as fixed-output derivations and
-staged/zipped directly in the derivation:
+binaries** — Termux aarch64 Node and its shared libraries, plus the upstream
+sing-box Android build — fetched as fixed-output derivations, plus a
+cross-compiled `tsnix`, and staged/zipped directly in the derivation:
 
 ```bash
 nix build .#hoyofall-android   # result/{module,hoyofall-android-arm64.zip}
 ```
 
-nixpkgs' `pkgsCross.aarch64-android*` sets are deliberately not used: they are
-uncached and broken when built from source (compiler-rt, tzdata, …). Every Termux
-package is a fixed-output download, so the build runs offline once fetched;
-versions/hashes are pinned in `nix/android.nix`. Full guide:
+`tsnix` is built from source for Android bionic by `nix/tsnix-android.nix`
+using nixpkgs' `pkgsCross.aarch64-android-prebuilt` (with the NDK); the rest of
+the module is fixed-output downloads, so the build runs offline once fetched.
+Versions and hashes are pinned in `nix/android.nix`. Full guide:
 [android.md](./android.md).
 
 ## Updating the package

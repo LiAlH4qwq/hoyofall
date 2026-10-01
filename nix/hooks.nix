@@ -1,7 +1,12 @@
-{ lib, ... }:
+{ lib, inputs, ... }:
 {
   perSystem =
-    { config, pkgs, ... }:
+    {
+      config,
+      pkgs,
+      system,
+      ...
+    }:
     let
       nodejs = pkgs.nodejs_26 or pkgs.nodejs;
     in
@@ -39,6 +44,9 @@
             pkgs.check-jsonschema
             pkgs.mdbook
             pkgs.actionlint
+            # Host tsnix, so `pnpm check` can evaluate the Android Nix config
+            # templates (test/android-nix.test.ts).
+            inputs.tsnix.packages.${system}.tsnix
           ];
         };
       };

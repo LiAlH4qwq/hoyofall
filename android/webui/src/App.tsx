@@ -2,11 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import CodeMirror from "@uiw/react-codemirror"
 import { yaml } from "@codemirror/lang-yaml"
 import { json } from "@codemirror/lang-json"
+import { nix } from "@replit/codemirror-lang-nix"
+import { Effect } from "effect"
 import { parse } from "yaml"
 import {
   SERVICES,
   readConfig,
+  readConfigSource,
   readLog,
+  renderConfigSource,
   restart,
   run,
   start,
@@ -14,6 +18,7 @@ import {
   stop,
   toast,
   writeConfig,
+  writeConfigSource,
   type ServiceName,
   type ServiceStatus,
 } from "./api"
@@ -107,13 +112,15 @@ const Dashboard = ({ onOpen }: { onOpen: (service: ServiceName) => void }) => (
   </div>
 )
 
-type ConfigMode = "form" | "raw"
+type ConfigMode = "form" | "nix" | "raw"
 
 const MODE_KEY = (service: ServiceName) => `hoyofall.config.mode.${service}`
 
 const readStoredMode = (service: ServiceName): ConfigMode | null => {
   const stored = window.localStorage.getItem(MODE_KEY(service))
-  return stored === "form" || stored === "raw" ? stored : null
+  return stored === "form" || stored === "nix" || stored === "raw"
+    ? stored
+    : null
 }
 
 const parseYaml = (text: string): unknown => {
@@ -124,25 +131,41 @@ const parseYaml = (text: string): unknown => {
   }
 }
 
+const nixPlaceholder = (service: ServiceName): string =>
+  service === "sing-box"
+    ? '{ log = { level = "info"; timestamp = true; }; outbounds = [ { type = "direct"; tag = "direct"; } ]; route = { final = "direct"; }; }'
+    : '# The final expression is the hoyofall config record.\n{ subscriptions = { default = { name = "default"; urlEnv = "HOYOFALL_SUB_URL"; } }; }'
+
 const ConfigEditor = ({ service }: { service: ServiceName }) => {
   const [mode, setMode] = useState<ConfigMode>(
-    () => readStoredMode(service) ?? (service === "hoyofall" ? "form" : "raw"),
+    () => readStoredMode(service) ?? "nix",
   )
   const [raw, setRaw] = useState("")
+  const [source, setSource] = useState("")
   const [value, setValue] = useState<unknown>({})
+  const [preview, setPreview] = useState("")
   const [errors, setErrors] = useState<ReadonlyArray<string>>([])
   const [loaded, setLoaded] = useState(false)
   const [rawDirty, setRawDirty] = useState(false)
+  const [sourceDirty, setSourceDirty] = useState(false)
   const [formDirty, setFormDirty] = useState(false)
 
   const load = useCallback(() => {
-    void run(readConfig(service)).then(
-      (text) => {
+    void run(
+      Effect.gen(function* () {
+        const text = yield* readConfig(service)
+        const src = yield* readConfigSource(service)
+        return { text, src }
+      }),
+    ).then(
+      ({ text, src }) => {
         setRaw(text)
         setValue(parseYaml(text) ?? {})
         setRawDirty(false)
         setFormDirty(false)
         setErrors([])
+        setSource(src)
+        setSourceDirty(false)
         setLoaded(true)
       },
       (cause: Error) => toast(`load config failed: ${cause.message}`),
@@ -188,8 +211,29 @@ const ConfigEditor = ({ service }: { service: ServiceName }) => {
     )
   }, [service, raw, value, load])
 
+  const saveSource = useCallback(() => {
+    void run(writeConfigSource(service, source)).then(
+      () => {
+        toast("rendered and saved")
+        setSourceDirty(false)
+        load()
+      },
+      (cause: Error) => toast(`render failed: ${cause.message}`),
+    )
+  }, [service, source, load])
+
+  const doPreview = useCallback(() => {
+    void run(renderConfigSource(service)).then(
+      (text) => setPreview(text),
+      (cause: Error) => {
+        setPreview("")
+        toast(`preview failed: ${cause.message}`)
+      },
+    )
+  }, [service])
+
   const modes: ReadonlyArray<ConfigMode> =
-    service === "hoyofall" ? ["form", "raw"] : ["raw"]
+    service === "hoyofall" ? ["nix", "form", "raw"] : ["nix", "raw"]
 
   return (
     <div className="editor">
@@ -201,7 +245,7 @@ const ConfigEditor = ({ service }: { service: ServiceName }) => {
             className={mode === entry ? "active" : ""}
             onClick={() => changeMode(entry)}
           >
-            {entry === "form" ? "Form" : "Raw"}
+            {entry === "form" ? "Form" : entry === "nix" ? "Nix" : "Raw"}
           </button>
         ))}
       </nav>
@@ -234,6 +278,39 @@ const ConfigEditor = ({ service }: { service: ServiceName }) => {
               Reload
             </button>
           </div>
+        </div>
+      ) : null}
+      {loaded && mode === "nix" ? (
+        <div className="editor">
+          <CodeMirror
+            value={source}
+            height="50vh"
+            extensions={[nix()]}
+            placeholder={nixPlaceholder(service)}
+            onChange={(next) => {
+              setSource(next)
+              setSourceDirty(true)
+            }}
+          />
+          <div className="controls">
+            <span className={sourceDirty ? "badge starting" : "badge"}>
+              {sourceDirty ? "unsaved" : "saved"}
+            </span>
+            <button type="button" onClick={saveSource}>
+              Render &amp; save
+            </button>
+            <button type="button" className="ghost" onClick={doPreview}>
+              Preview
+            </button>
+            <button type="button" className="ghost" onClick={load}>
+              Reload
+            </button>
+          </div>
+          {preview !== "" ? <pre className="preview">{preview}</pre> : null}
+          <p className="hint">
+            A Nix expression rendered on device by tsnix (no store) to{" "}
+            {service === "sing-box" ? "JSON" : "YAML"}, validated, then written.
+          </p>
         </div>
       ) : null}
       {loaded && mode === "raw" ? (

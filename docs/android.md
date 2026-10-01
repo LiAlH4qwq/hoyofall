@@ -32,15 +32,18 @@ Porting Node (which already runs this exact bundle) is the smaller, safer change
 
 ## How it is built
 
-The module is assembled entirely from **prebuilt binaries** — there is no
-cross-compilation, and no NDK or Rust toolchain is involved. `nix/android.nix`
-fetches:
+The module is assembled from **prebuilt binaries** fetched as fixed-output
+derivations. The one source-built piece is **tsnix** (the store-less Nix
+evaluator behind the WebUI's Nix mode): `nix/tsnix-android.nix` cross-compiles
+it against Android bionic with the NDK, so the module stays small.
+`nix/android.nix` fetches:
 
 | Component | Source |
 |---|---|
 | Node.js (aarch64) | Termux `nodejs` package |
 | Runtime libraries + CA bundle | Termux (`libc++`, `openssl`, `c-ares`, `libicu`, `libsqlite`, `zlib`, `libffi`, `ca-certificates`) |
 | sing-box (arm64) | SagerNet Android release |
+| tsnix (arm64) | built from `github:lialh4qwq/tsnix` by `nix/tsnix-android.nix` |
 
 All are fixed-output derivations, so every download happens before the build and
 the build phases run offline. The flake stages the module payload, the hoyofall
@@ -94,12 +97,19 @@ service (hoyofall and sing-box), and is backed entirely by the supervisor's
   which the supervisor honours, so changes take effect
   immediately without a reboot.
 - **Config** — backed by the supervisor's `control` command:
+  - **Nix** (default): edit a `config.nix` source document, rendered on device
+    by the bundled **tsnix** — a store-less Nix evaluator — to YAML/JSON and
+    validated before the live config is replaced. `tsnix eval --io local`
+    supports relative `import`s; store builtins are rejected with a clear error.
+    A render or validation failure leaves the running config untouched and the
+    source is still saved.
   - **Form** (hoyofall only): a schema-driven form generated from the same
     Effect `Config` schema the daemon uses, with inline validation and
     comment-preserving YAML edits.
   - **Raw**: a CodeMirror editor with YAML/JSON highlighting.
-  Both base64-encode the text and call `set-config`, which validates a candidate
-  config with the service's own checker before committing it atomically.
+  Nix saves with `set-source` (base64); Form/Raw save with `set-config`. Both
+  validate a candidate config with the service's own checker before committing
+  it atomically.
 - **Log** — a smart log view (line filter, follow/auto-scroll) reading the last
   300 lines via the supervisor's `log` action.
 
@@ -120,10 +130,12 @@ su -c '/system/bin/env LD_LIBRARY_PATH=/data/adb/modules/hoyofall/lib /data/adb/
 ```
 
 `supervisor.js control <action> [service]` actions: `status`, `start`, `stop`,
-`restart`, `config`, `set-config` (base64 from `HOYOFALL_CONFIG_B64`), `log`;
-`service` is `hoyofall` or `sing-box` (`status` without a service lists both).
-`set-config` validates a candidate config with the service's own checker before
-committing it atomically (`hoyofall --check`; sing-box has no standalone checker
+`restart`, `config`, `config-source`, `set-config` (base64 from
+`HOYOFALL_CONFIG_B64`), `render-config`, `set-source` (base64 from the same
+variable), `log`; `service` is `hoyofall` or `sing-box` (`status` without a
+service lists both). `set-config`/`set-source` validate a candidate config with
+the service's own checker before committing it atomically, and `render-config`
+renders without writing (`hoyofall --check`; sing-box has no standalone checker
 because its config is merged with the fragment). The supervisor runs as root,
 like everything else in the module.
 
@@ -200,12 +212,14 @@ files; anything else is rejected by `pnpm lint`.
 | `/data/adb/hoyofall/android.conf` | Supervisor settings: external sing-box watcher, restart policy, intervals (TOML). |
 | `/data/adb/hoyofall/hoyofall/` | hoyofall data dir. |
 | `/data/adb/hoyofall/hoyofall/config.yaml` | hoyofall configuration (seeded on first boot). |
+| `/data/adb/hoyofall/hoyofall/config.nix` | Nix source document for the WebUI's Nix mode; rendered to `config.yaml`. |
 | `/data/adb/hoyofall/hoyofall/hoyofall.env` | Subscription tokens (`urlEnv`). |
 | `/data/adb/hoyofall/hoyofall/out/fragment.json` | Atomic aggregate fragment; also sing-box's `-C` directory. |
 | `/data/adb/hoyofall/hoyofall/disabled` | Present when hoyofall is stopped via the WebUI/control protocol. |
 | `/data/adb/hoyofall/hoyofall/log/hoyofall.log` | hoyofall stdout/stderr. |
 | `/data/adb/hoyofall/sing-box/` | sing-box data dir. |
 | `/data/adb/hoyofall/sing-box/config.json` | sing-box configuration (seeded). |
+| `/data/adb/hoyofall/sing-box/config.nix` | Nix source document for the WebUI's Nix mode; rendered to `config.json`. |
 | `/data/adb/hoyofall/sing-box/cache/` | sing-box working dir (`-D`): cache and any Clash-API external UI. |
 | `/data/adb/hoyofall/sing-box/disabled` | Present when sing-box is stopped. |
 | `/data/adb/hoyofall/sing-box/log/sing-box.log` | sing-box stdout/stderr. |
@@ -228,7 +242,9 @@ files; anything else is rejected by `pnpm lint`.
 
 `nix build .#hoyofall-android` pins prebuilt binaries in `nix/android.nix`: the
 Termux packages (`nodejsDeb`, the runtime libraries, and the CA bundle) and
-`singbox` (the upstream SagerNet Android release).
+`singbox` (the upstream SagerNet Android release). `tsnix` is not pinned by
+hash: it is built from the `tsnix` flake input (`nix/tsnix-android.nix`), so
+refreshing it means updating the `flake.lock` input (`nix flake update tsnix`).
 
 To refresh Termux: look up the current `Version`, `Filename` and `SHA256` in the
 Termux `stable` aarch64 index

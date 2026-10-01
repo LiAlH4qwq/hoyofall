@@ -11,7 +11,7 @@ dependencies; `pnpm install` at the repository root installs them.
 | File | Role |
 |---|---|
 | `src/main.tsx` | Entry point: mounts `<App />` into `#root`. |
-| `src/App.tsx` | The UI: a **Dashboard** plus a **Control / Config / Log** page per service; Config has **Form / Raw** modes. |
+| `src/App.tsx` | The UI: a **Dashboard** plus a **Control / Config / Log** page per service; Config has **Nix / Form / Raw** modes. |
 | `src/api.ts` | Typed `Effect` wrappers over the supervisor's `control` actions. |
 | `src/ksu.ts` | The KernelSU WebUI bridge (`window.ksu.exec`) as an `Effect`. |
 | `src/schemaForm.tsx` | Generic, recursive form renderer over a JSON Schema (objects, records, arrays, enums, unions). |

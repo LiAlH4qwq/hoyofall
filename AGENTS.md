@@ -287,11 +287,13 @@ No pre-release suffixes are used. The Android `versionCode` is derived as
 ## Nix
 
 - `flake-parts`: `perSystem.packages.hoyofall` (and `default`),
-  `packages.hoyofall-android` (`nix/android.nix`: the flashable module assembled
-  from **prebuilt Termux aarch64 binaries**, fetched as fixed-output
-  derivations, then staged/zipped in the derivation), `devShells.default`,
-  `overlays`, `nixosModules`. nixpkgs' `pkgsCross.aarch64-android*` sets are
-  intentionally unused (uncached and broken from source).
+  `packages.hoyofall-android` (`nix/android.nix`: the flashable module, staged
+  from prebuilt Termux aarch64 binaries fetched as fixed-output derivations plus
+  a cross-built `tsnix`, then zipped in the derivation),
+  `packages.tsnix-android`, `devShells.default`, `overlays`, `nixosModules`.
+  `tsnix` is cross-compiled for Android bionic by `nix/tsnix-android.nix` using
+  nixpkgs' `pkgsCross.aarch64-android-prebuilt`; there is no blanket no-cross
+  rule — cross-build a piece when it shrinks the module and the toolchain works.
 - `nix/package.nix` builds with pnpm + rolldown. The pnpm store format changes
   between pnpm majors, so `flake.nix` pins `pnpm_12` and the dependency hash
   lives in a per-system `pnpmDepsHashes` map (with a `default`); refresh it when

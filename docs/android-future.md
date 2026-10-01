@@ -75,15 +75,17 @@ These are already used; splitting must preserve them or bump a protocol version.
 - **Service spec** (`android/supervisor/src/services.ts`): `service-names`,
   `service-spec <name>`, `service-status <name>`, `stop-service <name>`,
   `pids <pattern>`. The spec record is
-  `{ name, bin, args, match, config, format, check, log, flag }`: `match` is the
-  `pgrep -f` pattern that identifies a running instance, `format` the render
-  format, and `check` the validator command (empty = no standalone check).
+  `{ name, bin, args, match, config, source, format, check, log, flag, tsnix }`:
+  `match` is the `pgrep -f` pattern that identifies a running instance, `source`
+  the Nix config document rendered by `tsnix`, `format` the render format, and
+  `check` the validator command (empty = no standalone check).
 - **Control protocol** (`supervisor.js control`):
   `supervisor.js control <action> [service]` where
-  `action ∈ {status,start,stop,restart,config,set-config,log}` and the write
-  action reads base64 from `HOYOFALL_CONFIG_B64`. `set-config` validates before
-  committing. `status` returns compact JSON `{enabled,running,supervisor}` (or an
-  array with `service`).
+  `action ∈ {status,start,stop,restart,config,config-source,set-config,
+  render-config,set-source,log}` and the write actions read base64 from
+  `HOYOFALL_CONFIG_B64`. `set-config`/`set-source` validate before committing.
+  `status` returns compact JSON `{enabled,running,supervisor}` (or an array with
+  `service`).
 - **Supervision**: a service is a long-running `bin`+`args`, restarted on exit,
   with its `flag` file meaning "stopped"; the supervisor process itself never
   exits so `start` works without a reboot.

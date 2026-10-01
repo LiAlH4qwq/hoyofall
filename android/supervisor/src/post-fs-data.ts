@@ -41,6 +41,16 @@ export const postFsData = (): Effect.Effect<void, FsError> =>
         join(SINGBOX_DIR, "config.json"),
         "sing-box config",
       ],
+      [
+        modulePath("config", "hoyofall.nix"),
+        join(HOYOFALL_DIR, "config.nix"),
+        "config source",
+      ],
+      [
+        modulePath("config", "singbox.nix"),
+        join(SINGBOX_DIR, "config.nix"),
+        "sing-box config source",
+      ],
     ]
 
     yield* Effect.all(

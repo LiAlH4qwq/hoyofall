@@ -23,11 +23,11 @@ bootstrap shims, each a single `exec` of the bundled Node runtime (plus
 | [`webui/`](./webui/) | React + Effect + CodeMirror KernelSU WebUI, bundled by rolldown. |
 | [`module/`](./module/) | The Magisk payload: shims, `supervisor.js`, default configs, WebUI. |
 
-Everything is assembled from **prebuilt binaries** — there is no
-cross-compilation, and no NDK or Rust toolchain. `nix/android.nix` fetches
+The module is staged from **prebuilt binaries**: `nix/android.nix` fetches
 Termux aarch64 Node (with its libraries and a CA bundle) and the upstream
 SagerNet sing-box Android build as fixed-output derivations, then stages and
-zips the module.
+zips the module. `tsnix` is the one source-built piece — cross-compiled against
+Android bionic by `nix/tsnix-android.nix`.
 
 ## Build
 
@@ -72,11 +72,13 @@ su -c '/system/bin/env LD_LIBRARY_PATH=/data/adb/modules/hoyofall/lib /data/adb/
 | `/data/adb/modules/hoyofall/` | Code only: shims, `supervisor.js`, `bin/{node,sing-box}`, `index.js`, `schema.json`, `lib/`, `webroot/`, seed `config/`. |
 | `/data/adb/hoyofall/` | Global data dir; `android.conf` (supervisor settings) lives here. |
 | `/data/adb/hoyofall/hoyofall/config.yaml` | hoyofall configuration (seeded on first boot). |
+| `/data/adb/hoyofall/hoyofall/config.nix` | Nix source; rendered to `config.yaml` on save. |
 | `/data/adb/hoyofall/hoyofall/hoyofall.env` | Subscription tokens (`urlEnv`). |
 | `/data/adb/hoyofall/hoyofall/out/fragment.json` | Atomic aggregate fragment; sing-box's `-C` dir. |
 | `/data/adb/hoyofall/hoyofall/disabled` | Present when hoyofall is stopped via the WebUI/control protocol. |
 | `/data/adb/hoyofall/hoyofall/log/hoyofall.log` | hoyofall stdout/stderr. |
 | `/data/adb/hoyofall/sing-box/config.json` | sing-box configuration (seeded). |
+| `/data/adb/hoyofall/sing-box/config.nix` | Nix source; rendered to `config.json` on save. |
 | `/data/adb/hoyofall/sing-box/cache/` | sing-box working dir (`-D`): cache and Clash-API UI. |
 | `/data/adb/hoyofall/sing-box/disabled` | Present when sing-box is stopped. |
 | `/data/adb/hoyofall/sing-box/log/sing-box.log` | sing-box stdout/stderr. |

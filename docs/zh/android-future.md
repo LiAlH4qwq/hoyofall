@@ -67,12 +67,13 @@
 - **服务 spec**（`android/supervisor/src/services.ts`）：`service-names`、
   `service-spec <name>`、`service-status <name>`、`stop-service <name>`、
   `pids <pattern>`。spec 记录为
-  `{ name, bin, args, match, config, format, check, log, flag }`：`match` 是标识运行中
-  实例的 `pgrep -f` 模式，`format` 是其渲染格式，`check` 是校验器命令（空 = 无独立
-  检查）。
+  `{ name, bin, args, match, config, source, format, check, log, flag, tsnix }`：
+  `match` 是标识运行中实例的 `pgrep -f` 模式，`source` 是交由 `tsnix` 渲染的 Nix 配置
+  文档，`format` 是其渲染格式，`check` 是校验器命令（空 = 无独立检查）。
 - **控制协议**（`supervisor.js control`）：`supervisor.js control <action> [service]`，
-  其中 `action ∈ {status,start,stop,restart,config,set-config,log}`，写入类动作从
-  `HOYOFALL_CONFIG_B64` 读取 base64。`set-config` 在提交前校验。`status` 返回紧凑 JSON
+  其中 `action ∈ {status,start,stop,restart,config,config-source,set-config,
+  render-config,set-source,log}`，写入类动作从 `HOYOFALL_CONFIG_B64` 读取 base64。
+  `set-config`/`set-source` 在提交前校验。`status` 返回紧凑 JSON
   `{enabled,running,supervisor}`（或带 `service` 的数组）。
 - **守护**：一个服务就是一个长期运行的 `bin`+`args`，退出后重启，其 `flag` 文件表示
   “已停止”；守护进程本身永不退出，因此无需重启即可让 `start` 生效。

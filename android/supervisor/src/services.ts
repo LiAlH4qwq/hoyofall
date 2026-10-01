@@ -21,10 +21,15 @@ export interface ServiceSpec {
   // would also match the supervisor; match the argv instead.
   readonly match: string
   readonly config: string
+  // The Nix source document the WebUI edits; rendered on device by `tsnix`
+  // (see render.ts) into `config`.
+  readonly source: string
   readonly format: "yaml" | "json"
   readonly check: ReadonlyArray<string>
   readonly log: string
   readonly flag: string
+  // The store-less Nix evaluator bundled at bin/tsnix.
+  readonly tsnix: string
 }
 
 // The supervisor runs as `bin/node .../supervisor.js service`; the control
@@ -43,10 +48,12 @@ const hoyofallSpec: ServiceSpec = {
   ],
   match: modulePath("index.js"),
   config: join(HOYOFALL_DIR, "config.yaml"),
+  source: join(HOYOFALL_DIR, "config.nix"),
   format: "yaml",
   check: [modulePath("bin", "node"), modulePath("index.js"), "--check", "--config"],
   log: join(HOYOFALL_DIR, "log", "hoyofall.log"),
   flag: join(HOYOFALL_DIR, "disabled"),
+  tsnix: modulePath("bin", "tsnix"),
 }
 
 const singboxSpec: ServiceSpec = {
@@ -65,12 +72,14 @@ const singboxSpec: ServiceSpec = {
   ],
   match: modulePath("bin", "sing-box"),
   config: join(SINGBOX_DIR, "config.json"),
+  source: join(SINGBOX_DIR, "config.nix"),
   format: "json",
   // No standalone checker: sing-box reads its config merged with hoyofall's
   // fragment (`-C`), so a bare `check -c` reports missing outbounds.
   check: [],
   log: join(SINGBOX_DIR, "log", "sing-box.log"),
   flag: join(SINGBOX_DIR, "disabled"),
+  tsnix: modulePath("bin", "tsnix"),
 }
 
 export const serviceSpec = (name: ServiceName): ServiceSpec =>

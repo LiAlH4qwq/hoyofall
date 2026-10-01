@@ -61,7 +61,8 @@ nix build .#hoyofall-android   # result/hoyofall-android-arm64.zip
 
 ## Shell 规则
 
-Bash 被禁止；手写脚本使用 Nushell。`pnpm lint` 还会运行
+Bash 被禁止；编写的逻辑是 TypeScript（应用与 Android supervisor）或 Nushell
+（开发/编排脚本与生成的 systemd 单元）。`pnpm lint` 还会运行
 `scripts/check-shell.ts`，它在任何 `.sh` / `.bash` / `.bats` 文件或 bash/POSIX
 shebang 出现在白名单之外时失败。唯一的例外是仅执行 exec 的 Android 模块 shim
 （见 [`android.md`](./android.md#shims)）与 Nix `stdenv` 构建阶段。完整理由见

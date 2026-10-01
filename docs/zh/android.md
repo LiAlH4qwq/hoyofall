@@ -28,14 +28,16 @@ Android 目标产出的是 **JNI 应用**，而非 shell 守护进程；而且 `
 
 ## 如何构建
 
-模块完全由**预编译二进制**组装——没有交叉编译，也不涉及 NDK 或 Rust 工具链。
-`nix/android.nix` 抓取：
+模块由作为 fixed-output derivation 抓取的**预编译二进制**组装。唯一从源码构建的部分是
+**tsnix**（WebUI 的 Nix 模式所用的无 store Nix 求值器）：`nix/tsnix-android.nix` 用 NDK
+把它交叉编译到 Android bionic，从而让模块保持小巧。`nix/android.nix` 抓取：
 
 | 组件 | 来源 |
 |---|---|
 | Node.js (aarch64) | Termux `nodejs` 包 |
 | 运行时库 + CA 证书包 | Termux（`libc++`、`openssl`、`c-ares`、`libicu`、`libsqlite`、`zlib`、`libffi`、`ca-certificates`） |
 | sing-box (arm64) | SagerNet Android 发布版 |
+| tsnix (arm64) | 由 `nix/tsnix-android.nix` 从 `github:lialh4qwq/tsnix` 构建 |
 
 它们都是 fixed-output derivation，因此所有下载都发生在构建之前，构建阶段可离线运行。
 flake 会把模块载荷、hoyofall 产物与 JSON Schema、WebUI 产物与许可证文本分阶段放置，
@@ -84,11 +86,15 @@ KernelSU WebUI 实现——
   `/data/adb/hoyofall/sing-box/disabled`），守护进程会遵循它，因此变更立即生效，无需
   重启。
 - **Config**——由守护进程的 `control` 命令支撑：
+  - **Nix**（默认）：编辑 `config.nix` 源文档，由随附的 **tsnix**（无 store 的 Nix
+    求值器）在设备上渲染为 YAML/JSON，并在替换生效配置前校验。`tsnix eval --io local`
+    支持相对 `import`；store builtin 会被明确拒绝。渲染或校验失败时运行中的配置不受
+    影响，源文档仍会保存。
   - **Form**（仅 hoyofall）：由守护进程所用的同一份 Effect `Config` schema 生成的表单，
     带内联校验与保留注释的 YAML 编辑。
   - **Raw**：带 YAML/JSON 高亮的 CodeMirror 编辑器。
-  两者都会对文本做 base64 编码并调用 `set-config`，后者在原子提交前会用服务自身的
-  检查器校验候选配置。
+  Nix 通过 `set-source`（base64）保存；Form/Raw 通过 `set-config` 保存。两者都会在原子
+  提交前用服务自身的检查器校验候选配置。
 - **Log**——智能日志视图（行过滤、跟随/自动滚动），通过守护进程的 `log` 动作读取最后
   300 行。
 
@@ -107,11 +113,12 @@ su -c '/system/bin/env LD_LIBRARY_PATH=/data/adb/modules/hoyofall/lib /data/adb/
 ```
 
 `supervisor.js control <action> [service]` 的动作：`status`、`start`、`stop`、
-`restart`、`config`、`set-config`（从 `HOYOFALL_CONFIG_B64` 取 base64）、`log`；
-`service` 为 `hoyofall` 或 `sing-box`（不带 service 的 `status` 会列出两者）。
-`set-config` 在提交前会用服务自身的检查器校验候选配置（`hoyofall --check`；sing-box
-没有独立检查器，因为它的配置会与片段合并）。守护进程以 root 运行，与模块中的其他一切
-相同。
+`restart`、`config`、`config-source`、`set-config`（从 `HOYOFALL_CONFIG_B64` 取
+base64）、`render-config`、`set-source`（同样从该变量取 base64）、`log`；`service` 为
+`hoyofall` 或 `sing-box`（不带 service 的 `status` 会列出两者）。
+`set-config`/`set-source` 在提交前会用服务自身的检查器校验候选配置，`render-config`
+只渲染不写入（`hoyofall --check`；sing-box 没有独立检查器，因为它的配置会与片段合并）。
+守护进程以 root 运行，与模块中的其他一切相同。
 
 ## sing-box
 
@@ -180,12 +187,14 @@ chmod 0755 "$MODPATH"/bin/* "$MODPATH"/*.sh
 | `/data/adb/hoyofall/android.conf` | 守护设置：外部 sing-box 监视器、重启策略、间隔（TOML）。 |
 | `/data/adb/hoyofall/hoyofall/` | hoyofall 数据目录。 |
 | `/data/adb/hoyofall/hoyofall/config.yaml` | hoyofall 配置（首次启动时预置）。 |
+| `/data/adb/hoyofall/hoyofall/config.nix` | 供 WebUI Nix 模式使用的 Nix 源文档；渲染为 `config.yaml`。 |
 | `/data/adb/hoyofall/hoyofall/hoyofall.env` | 订阅 token（`urlEnv`）。 |
 | `/data/adb/hoyofall/hoyofall/out/fragment.json` | 原子聚合片段；也是 sing-box 的 `-C` 目录。 |
 | `/data/adb/hoyofall/hoyofall/disabled` | 通过 WebUI/控制协议停止 hoyofall 时存在。 |
 | `/data/adb/hoyofall/hoyofall/log/hoyofall.log` | hoyofall 的 stdout/stderr。 |
 | `/data/adb/hoyofall/sing-box/` | sing-box 数据目录。 |
 | `/data/adb/hoyofall/sing-box/config.json` | sing-box 配置（预置）。 |
+| `/data/adb/hoyofall/sing-box/config.nix` | 供 WebUI Nix 模式使用的 Nix 源文档；渲染为 `config.json`。 |
 | `/data/adb/hoyofall/sing-box/cache/` | sing-box 工作目录（`-D`）：缓存与任何 Clash-API 外部 UI。 |
 | `/data/adb/hoyofall/sing-box/disabled` | sing-box 停止时存在。 |
 | `/data/adb/hoyofall/sing-box/log/sing-box.log` | sing-box 的 stdout/stderr。 |
@@ -207,6 +216,8 @@ chmod 0755 "$MODPATH"/bin/* "$MODPATH"/*.sh
 
 `nix build .#hoyofall-android` 在 `nix/android.nix` 中固定预编译二进制：Termux 包
 （`nodejsDeb`、运行时库与 CA 包）以及 `singbox`（上游 SagerNet Android 发布版）。
+`tsnix` 不以哈希固定：它由 `tsnix` flake input 构建（`nix/tsnix-android.nix`），因此刷新
+它意味着更新 `flake.lock` 中的该 input（`nix flake update tsnix`）。
 
 刷新 Termux：在 Termux `stable` aarch64 索引
 （`https://packages.termux.dev/apt/termux-main/dists/stable/main/binary-aarch64/Packages.gz`）
