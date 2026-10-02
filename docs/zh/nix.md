@@ -72,6 +72,12 @@ NixOS 模块只运行一个 `hoyofall.service`。程序本身是单实例的，�
   `WorkingDirectory=/run/hoyofall`。`settings` 在构建时用 `check-jsonschema` 按随包
   的 `schema.json` 校验。`output.file` 默认为 `/run/hoyofall/hoyofall.json` /
   `/run/hoyofall`；其他路径需要 `extraReadWritePaths`。`configFile` 会绕过输出默认值。
+  它排在 `NetworkManager-wait-online.service` /
+  `systemd-networkd-wait-online.service` 之后（被动的 `network-online.target`
+  在网络管理器重启后仍保持 active，无法在 switch 时起门控作用），保留
+  `/run/hoyofall` 以便上次的可用片段在重启后仍然存在，并对失败的刷新按
+  `retry.baseSeconds` / `retry.maxSeconds` 做指数退避重试。没有就绪订阅时不会写出
+  片段，除非显式启用 `output.file.emitEmptyFragment`（不推荐）。
 - `singboxIntegration.enable`：安装一个 root oneshot，把片段复制进 sing-box 的配置
   目录（`-C` 合并；对象覆盖、数组追加），设置 `RuntimeDirectoryPreserve=yes`，并添加
   一个 `systemd.paths` 单元，在片段变化时重新注入并重启 sing-box。它要求

@@ -11,7 +11,7 @@ import {
   type Scope,
 } from "effect"
 import type { ResolvedConfig, ResolvedSubscription } from "../config/load"
-import type { ConvertOptions } from "../config/schema"
+import type { ConvertOptions, RetryOptions } from "../config/schema"
 import {
   convertSubscription,
   warningMessage,
@@ -169,19 +169,38 @@ export const applyUpdate = (
   return { ...cache, [update.id]: next }
 }
 
+// A refresh schedule whose delay depends on the outcome: on success wait the
+// subscription interval, on failure back off exponentially (starting at
+// `baseSeconds`, capped at `maxSeconds` and never exceeding the normal
+// interval). The first refresh always runs immediately. `passthrough` makes the
+// delay depend on the `SubscriptionState`; `resetWhen` restarts the backoff
+// after a successful refresh.
+export const retrySchedule = (
+  intervalSeconds: number,
+  retry: RetryOptions,
+): Schedule.Schedule<SubscriptionState, SubscriptionState> => {
+  const interval = Duration.seconds(intervalSeconds)
+  const retryCap = Duration.min(Duration.seconds(retry.maxSeconds), interval)
+  return Schedule.exponential(Duration.seconds(retry.baseSeconds)).pipe(
+    Schedule.mapInput((state: SubscriptionState) => state),
+    Schedule.passthrough,
+    Schedule.resetWhen((state) => state._tag === "Ready"),
+    Schedule.modifyDelay((state, duration) =>
+      state._tag === "Ready" ? interval : Duration.min(duration, retryCap),
+    ),
+  )
+}
+
 const updateStream = (
   subscription: ResolvedSubscription,
   convert: ConvertOptions,
+  retry: RetryOptions,
 ): Stream.Stream<{ readonly id: string; readonly result: SubscriptionState }, never, HttpClient.HttpClient> =>
-  Stream.concat(
-    Stream.make(undefined),
-    Stream.fromSchedule(Schedule.spaced(Duration.seconds(subscription.intervalSeconds))),
+  Stream.repeatEffectWithSchedule(
+    refreshOne(subscription, convert),
+    retrySchedule(subscription.intervalSeconds, retry),
   ).pipe(
-    Stream.mapEffect(() =>
-      refreshOne(subscription, convert).pipe(
-        Effect.map((result) => ({ id: subscription.id, result })),
-      ),
-    ),
+    Stream.map((result) => ({ id: subscription.id, result })),
   )
 
 export const snapshotStream = (
@@ -189,7 +208,7 @@ export const snapshotStream = (
 ): Stream.Stream<CacheMap, never, HttpClient.HttpClient> =>
   Stream.mergeAll(
     config.subscriptions.map((subscription) =>
-      updateStream(subscription, config.convert),
+      updateStream(subscription, config.convert, config.retry),
     ),
     { concurrency: "unbounded" },
   ).pipe(

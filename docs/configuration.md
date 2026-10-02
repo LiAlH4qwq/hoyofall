@@ -88,6 +88,21 @@ members:
 | `convert.emitBuiltinOutbounds` | boolean | `false` | Emit `direct`/`block` outbounds. Leave `false` when merging into a base config that already defines them. |
 | `convert.proxyNameFormat` | string | `"{sub}-{name}"` | Template for final outbound tags. `{sub}` = subscription `name` (or `id`), `{name}` = original proxy/group name. |
 
+## `retry` (instance-wide)
+
+When a refresh fails, hoyofall retries with exponential backoff instead of
+waiting a full `intervalSeconds`. This recovers quickly from a subscription
+fetch that races the network coming up (for example on `nixos-rebuild switch`).
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `retry` | object | `{ baseSeconds: 5, maxSeconds: 300 }` | Retry/backoff policy. |
+| `retry.baseSeconds` | integer > 0 | `5` | First retry delay after a failure; doubles on each consecutive failure. |
+| `retry.maxSeconds` | integer > 0 | `300` | Upper bound for the backoff delay; must be `>= baseSeconds`. The effective cap is also never larger than the subscription's `intervalSeconds`. |
+
+After a successful refresh the subscription waits its normal `intervalSeconds`
+again.
+
 ## `subscriptions.<id>` (map, required, at least one)
 
 The map key is the subscription id — it is also the default display name and the
@@ -140,6 +155,7 @@ a single subscription).
 | `output.file.directory` | string | `"."` | Output directory (used by `per-subscription` / `both`). |
 | `output.file.permissions` | octal string | `"0644"` | File mode for written fragments. |
 | `output.file.pretty` | boolean | `true` | Pretty-print JSON with 2-space indent. |
+| `output.file.emitEmptyFragment` | boolean | `false` | **Not recommended.** Write the group-only, outbound-less fragment when every subscription failed and none has a cached fragment. Leaving it `false` keeps the previously written fragment, so sing-box is not left with no proxies. |
 | `output.http` | object | `{ enabled: false, listen: { host: "127.0.0.1", port: 9090 } }` | Optional HTTP endpoint. |
 | `output.http.enabled` | boolean | `false` | Enable the HTTP server. |
 | `output.http.listen.host` | string | `"127.0.0.1"` | Bind host. |

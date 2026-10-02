@@ -76,6 +76,17 @@ convert:
   proxyNameFormat: "{sub}-{name}"
 
 # ---------------------------------------------------------------------------
+# retry (instance-wide)
+# ---------------------------------------------------------------------------
+# When a refresh fails, retry with exponential backoff instead of waiting a
+# full `intervalSeconds`. The delay starts at `baseSeconds` and is capped at
+# `maxSeconds` (and never exceeds the subscription's `intervalSeconds`). After a
+# successful refresh the normal interval applies again.
+retry:
+  baseSeconds: 5     # Default: 5
+  maxSeconds: 300    # Default: 300; must be >= baseSeconds
+
+# ---------------------------------------------------------------------------
 # subscriptions (required, at least one; map keyed by subscription id)
 # ---------------------------------------------------------------------------
 subscriptions:
@@ -133,6 +144,10 @@ output:
     # directory: /run/hoyofall
     permissions: "0644"
     pretty: true
+    # Write the group-only fragment when every subscription failed and none has
+    # a cached fragment. Default: false. NOT RECOMMENDED: sing-box would come up
+    # with no outbounds.
+    emitEmptyFragment: false
 
   # Optional HTTP endpoint. Default: { enabled: false, listen: { host: "127.0.0.1", port: 9090 } }.
   http:

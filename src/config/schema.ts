@@ -220,6 +220,12 @@ export const FileOutput = Schema.Struct({
   }),
   permissions: Schema.optionalWith(Schema.String, { default: () => "0644" }),
   pretty: Schema.optionalWith(Schema.Boolean, { default: () => true }),
+  // Write the group-only, outbound-less fragment when *every* subscription
+  // failed and none has a previously-cached fragment. Off by default: such a
+  // fragment makes sing-box come up with no proxies. Not recommended.
+  emitEmptyFragment: Schema.optionalWith(Schema.Boolean, {
+    default: () => false,
+  }),
 })
 export type FileOutput = typeof FileOutput.Type
 
@@ -230,6 +236,7 @@ const defaultFileOutput: FileOutput = {
   path: "hoyofall.json",
   permissions: "0644",
   pretty: true,
+  emitEmptyFragment: false,
 }
 
 export const HttpOutput = Schema.Struct({
@@ -265,6 +272,28 @@ export const defaultOutput: Output = {
   http: defaultHttpOutput,
 }
 
+export const RetryOptions = Schema.Struct({
+  baseSeconds: Schema.optionalWith(
+    Schema.Int.pipe(Schema.greaterThan(0)),
+    { default: () => 5 },
+  ),
+  maxSeconds: Schema.optionalWith(
+    Schema.Int.pipe(Schema.greaterThan(0)),
+    { default: () => 300 },
+  ),
+}).pipe(
+  Schema.filter((retry) => retry.baseSeconds <= retry.maxSeconds, {
+    message: () =>
+      "retry.maxSeconds must be greater than or equal to retry.baseSeconds",
+  }),
+)
+export type RetryOptions = typeof RetryOptions.Type
+
+export const defaultRetry: RetryOptions = {
+  baseSeconds: 5,
+  maxSeconds: 300,
+}
+
 export const Config = Schema.Struct({
   groups: Schema.optionalWith(InstanceGroups, {
     default: () => defaultInstanceGroups,
@@ -276,6 +305,7 @@ export const Config = Schema.Struct({
       proxyNameFormat: ProxyNameFormatDefault,
     }),
   }),
+  retry: Schema.optionalWith(RetryOptions, { default: () => defaultRetry }),
   output: Schema.optionalWith(Output, { default: () => defaultOutput }),
 })
 export type Config = typeof Config.Type

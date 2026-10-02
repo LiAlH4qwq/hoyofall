@@ -6,7 +6,7 @@ import {
   ConfigValidationError,
 } from "../errors"
 import { parseYamlUnknown } from "../yaml"
-import { Config, type ConvertOptions, type CustomGroup, type InstanceGroups, type Output, type Subscription, type SubscriptionGroups } from "./schema"
+import { Config, type ConvertOptions, type CustomGroup, type InstanceGroups, type Output, type RetryOptions, type Subscription, type SubscriptionGroups } from "./schema"
 
 export const decodeConfig = (
   parsed: unknown,
@@ -271,6 +271,7 @@ export interface ResolvedSubscription {
 export interface ResolvedConfig {
   readonly subscriptions: ReadonlyArray<ResolvedSubscription>
   readonly convert: ConvertOptions
+  readonly retry: RetryOptions
   readonly groups: InstanceGroups
   readonly output: Output
 }
@@ -307,6 +308,7 @@ export const resolveConfig = (
     return {
       subscriptions,
       convert: config.convert,
+      retry: config.retry,
       groups: config.groups,
       output: config.output,
     }

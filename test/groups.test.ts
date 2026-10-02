@@ -218,6 +218,7 @@ describe("instance-level custom groups", () => {
   ): ResolvedConfig => ({
     subscriptions,
     convert: { emitBuiltinOutbounds, proxyNameFormat: "{sub}-{name}" },
+    retry: { baseSeconds: 5, maxSeconds: 300 },
     groups: { custom },
     output: {
       file: {
@@ -227,6 +228,7 @@ describe("instance-level custom groups", () => {
         path: "hoyofall.json",
         permissions: "0644",
         pretty: true,
+        emitEmptyFragment: false,
       },
       http: { enabled: false, listen: { host: "127.0.0.1", port: 9090 } },
     },

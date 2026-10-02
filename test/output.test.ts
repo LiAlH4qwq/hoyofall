@@ -86,6 +86,7 @@ const makeConfig = (file: Partial<Output["file"]>): ResolvedConfig => {
   return {
     subscriptions: [subscription],
     convert,
+    retry: { baseSeconds: 5, maxSeconds: 300 },
     groups,
     output: {
       file: {
@@ -95,6 +96,7 @@ const makeConfig = (file: Partial<Output["file"]>): ResolvedConfig => {
         path: "hoyofall.json",
         permissions: "0644",
         pretty: true,
+        emitEmptyFragment: false,
         ...file,
       },
       http: { enabled: false, listen: { host: "127.0.0.1", port: 9090 } },
@@ -166,6 +168,37 @@ describe("writeSnapshot", () => {
         { type: "block", tag: "block" },
         nodeOutbound,
       ])
+    }).pipe(Effect.provide(NodeContext.layer)),
+  )
+
+  const failedCache = (): CacheMap => ({
+    a: { _tag: "Failed", error: "boom", updatedAt: 0 },
+  })
+
+  scoped("keeps the previous fragment when no subscription is ready", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem
+      const dir = yield* fs.makeTempDirectoryScoped()
+      const path = `${dir}/fragment.json`
+      yield* fs.writeFileString(path, "keep me")
+      yield* writeSnapshot(makeConfig({ path }), failedCache())
+      expect(yield* fs.readFileString(path)).toBe("keep me")
+    }).pipe(Effect.provide(NodeContext.layer)),
+  )
+
+  scoped("writes the outbound-less fragment when emitEmptyFragment is set", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem
+      const dir = yield* fs.makeTempDirectoryScoped()
+      const path = `${dir}/fragment.json`
+      yield* writeSnapshot(
+        makeConfig({ path, emitEmptyFragment: true }),
+        failedCache(),
+      )
+      const parsed = JSON.parse(
+        yield* fs.readFileString(path),
+      ) as Serialized
+      expect(parsed.outbounds).toEqual([])
     }).pipe(Effect.provide(NodeContext.layer)),
   )
 })

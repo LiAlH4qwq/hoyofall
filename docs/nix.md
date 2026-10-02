@@ -74,6 +74,13 @@ enough.
   `schema.json` with `check-jsonschema` at build time. `output.file` defaults to
   `/run/hoyofall/hoyofall.json` / `/run/hoyofall`; other paths need
   `extraReadWritePaths`. `configFile` bypasses the output defaults.
+  It orders after `NetworkManager-wait-online.service` /
+  `systemd-networkd-wait-online.service` (the passive `network-online.target`
+  stays active across a network-manager restart, so it cannot gate a switch),
+  preserves `/run/hoyofall` so the last good fragment survives restarts, and
+  retries failed refreshes with exponential backoff (`retry.baseSeconds` /
+  `retry.maxSeconds`). A fragment with no ready subscription is never written
+  unless `output.file.emitEmptyFragment` is explicitly enabled (not recommended).
 - `singboxIntegration.enable`: installs a root oneshot that copies the fragment
   into sing-box's config directory (`-C` merge; objects override, arrays append),
   sets `RuntimeDirectoryPreserve=yes`, and adds a `systemd.paths` unit that

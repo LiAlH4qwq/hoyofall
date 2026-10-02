@@ -50,6 +50,13 @@ export const writeSnapshot = (
       return
     }
     const conversions = collectReady(config, cache)
+    // With no ready subscription the assembled fragment would contain group
+    // definitions but no outbounds; writing it would hand sing-box an empty
+    // proxy set. Keep the previously written fragment instead. Opt in with
+    // `output.file.emitEmptyFragment` (not recommended).
+    if (conversions.length === 0 && !file.emitEmptyFragment) {
+      return
+    }
     const assembled = yield* assembleFragment(config, conversions)
 
     yield* Effect.all(

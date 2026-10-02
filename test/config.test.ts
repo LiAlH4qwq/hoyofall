@@ -21,7 +21,9 @@ describe("config decoding", () => {
     expect(config.convert.emitBuiltinOutbounds).toBe(false)
     expect(config.output.file.mode).toBe("aggregate")
     expect(config.output.file.pretty).toBe(true)
+    expect(config.output.file.emitEmptyFragment).toBe(false)
     expect(config.output.http.enabled).toBe(false)
+    expect(config.retry).toEqual({ baseSeconds: 5, maxSeconds: 300 })
     expect(config.subscriptions["airport"]?.intervalSeconds).toBe(3600)
     expect(config.subscriptions["airport"]?.onUnsupported).toBe("skip")
     expect(config.subscriptions["airport"]?.groups.native.enable).toBe(false)
@@ -184,6 +186,36 @@ output:
       includeDirect: true`)
     const config = Effect.runSync(decodeConfig(parse(yaml), "test.yaml"))
     expect(Effect.runSyncExit(validateConfig(config))._tag).toBe("Success")
+  })
+
+  it("rejects a retry max below the base", () => {
+    const yaml = `
+subscriptions:
+  airport:
+    url: https://example.com/sub
+output:
+  file: { enabled: true }
+retry:
+  baseSeconds: 30
+  maxSeconds: 5
+`
+    const exit = Effect.runSyncExit(decodeConfig(parse(yaml), "test.yaml"))
+    expect(exit._tag).toBe("Failure")
+  })
+
+  it("accepts an explicit retry policy", () => {
+    const yaml = `
+subscriptions:
+  airport:
+    url: https://example.com/sub
+output:
+  file: { enabled: true }
+retry:
+  baseSeconds: 2
+  maxSeconds: 60
+`
+    const config = Effect.runSync(decodeConfig(parse(yaml), "test.yaml"))
+    expect(config.retry).toEqual({ baseSeconds: 2, maxSeconds: 60 })
   })
 
   it("rejects an empty subscriptions map", () => {

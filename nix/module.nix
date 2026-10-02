@@ -10,9 +10,7 @@ let
   cfg = config.services.hoyofall;
   yaml = pkgs.formats.yaml { };
 
-  defaultPackage = withSystem pkgs.stdenv.hostPlatform.system (
-    ps: ps.config.packages.hoyofall
-  );
+  defaultPackage = withSystem pkgs.stdenv.hostPlatform.system (ps: ps.config.packages.hoyofall);
 
   runtimeDirectory = "hoyofall";
   runtimePath = "/run/${runtimeDirectory}";
@@ -31,7 +29,8 @@ let
         file = {
           path = fragmentPath;
           directory = runtimePath;
-        } // file;
+        }
+        // file;
       };
     };
 
@@ -41,12 +40,14 @@ let
     if cfg.configFile != null then
       cfg.configFile
     else
-      pkgs.runCommand "hoyofall.yaml" {
-        nativeBuildInputs = [ pkgs.check-jsonschema ];
-      } ''
-        check-jsonschema --schemafile ${cfg.package}/share/hoyofall/schema.json ${rendered}
-        cp ${rendered} $out
-      '';
+      pkgs.runCommand "hoyofall.yaml"
+        {
+          nativeBuildInputs = [ pkgs.check-jsonschema ];
+        }
+        ''
+          check-jsonschema --schemafile ${cfg.package}/share/hoyofall/schema.json ${rendered}
+          cp ${rendered} $out
+        '';
 
   singbox = cfg.singboxIntegration;
   # systemd.services keys omit the `.service` suffix; ordering deps keep it.
@@ -60,11 +61,15 @@ let
 
   injectScript = writeNu "hoyofall-inject-singbox" ''
     mkdir "/run/${singbox.runtimeDirectory}"
-    let deadline = (date now) + 120sec
+    let deadline = (date now) + 300sec
     while ((date now) < $deadline) and (not ("${fragmentPath}" | path exists)) {
       sleep 1sec
     }
-    cp --force "${fragmentPath}" "${injected}"
+    # Tolerate a missing fragment (e.g. every subscription failed at start up):
+    # keep the previously injected file rather than failing sing-box's start.
+    if ("${fragmentPath}" | path exists) {
+      cp --force "${fragmentPath}" "${injected}"
+    }
   '';
 
   refreshScript = writeNu "hoyofall-singbox-refresh" ''
@@ -181,13 +186,22 @@ in
 
     systemd.services.hoyofall = {
       description = "hoyofall - mihomo to sing-box fragment converter";
+      # `network.target` / `network-online.target` are passive: they stay active
+      # across a NetworkManager/networkd restart, so on `nixos-rebuild switch`
+      # they would not delay hoyofall. Order after the *wait-online* units
+      # instead; they are re-run when the network manager restarts. Missing
+      # units in `wants`/`after` are harmless on systems using the other stack.
       after = [
         "network.target"
         "network-online.target"
+        "NetworkManager-wait-online.service"
+        "systemd-networkd-wait-online.service"
       ];
       wants = [
         "network.target"
         "network-online.target"
+        "NetworkManager-wait-online.service"
+        "systemd-networkd-wait-online.service"
       ];
       wantedBy = [ "multi-user.target" ];
 
@@ -200,6 +214,9 @@ in
         DynamicUser = true;
         RuntimeDirectory = runtimeDirectory;
         RuntimeDirectoryMode = "0700";
+        # Keep the last good fragment across restarts so a failed start-up does
+        # not leave sing-box with nothing to inject.
+        RuntimeDirectoryPreserve = "yes";
         WorkingDirectory = runtimePath;
         ReadWritePaths = [ runtimePath ] ++ cfg.extraReadWritePaths;
         ProtectSystem = "strict";
@@ -224,7 +241,7 @@ in
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
-        TimeoutStartSec = 180;
+        TimeoutStartSec = 360;
         ExecStart = "${injectScript}";
       };
     };

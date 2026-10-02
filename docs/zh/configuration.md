@@ -82,6 +82,19 @@ members:
 | `convert.emitBuiltinOutbounds` | boolean | `false` | 是否输出 `direct`/`block` 出站。合并进已定义它们的基础配置时保持 `false`。 |
 | `convert.proxyNameFormat` | string | `"{sub}-{name}"` | 最终出站 tag 的模板。`{sub}` = 订阅 `name`（或 `id`），`{name}` = 原始代理/组名。 |
 
+## `retry`（实例级）
+
+刷新失败时，hoyofall 使用指数退避重试，而不是等待整整一个 `intervalSeconds`。
+这样在抓取与网络启动竞争时（例如 `nixos-rebuild switch`）能快速恢复。
+
+| 字段 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `retry` | object | `{ baseSeconds: 5, maxSeconds: 300 }` | 重试/退避策略。 |
+| `retry.baseSeconds` | 整数 > 0 | `5` | 失败后的首次重试延迟；每次连续失败翻倍。 |
+| `retry.maxSeconds` | 整数 > 0 | `300` | 退避延迟的上限；必须 `>= baseSeconds`。实际上限也不会超过该订阅的 `intervalSeconds`。 |
+
+刷新成功后，订阅重新按正常的 `intervalSeconds` 间隔刷新。
+
 ## `subscriptions.<id>`（映射，必填，至少一个）
 
 映射键即订阅 id——它同时是默认显示名与 `proxyNameFormat` 中的 `{sub}` 值。
@@ -131,6 +144,7 @@ members:
 | `output.file.directory` | string | `"."` | 输出目录（用于 `per-subscription` / `both`）。 |
 | `output.file.permissions` | 八进制字符串 | `"0644"` | 写出片段的文件模式。 |
 | `output.file.pretty` | boolean | `true` | 以 2 空格缩进美化 JSON。 |
+| `output.file.emitEmptyFragment` | boolean | `false` | **不推荐。** 当所有订阅都失败且没有任何缓存片段时，仍写出只有组、没有出站的片段。保持 `false` 会保留上次写出的片段，避免 sing-box 没有任何代理。 |
 | `output.http` | object | `{ enabled: false, listen: { host: "127.0.0.1", port: 9090 } }` | 可选 HTTP 端点。 |
 | `output.http.enabled` | boolean | `false` | 启用 HTTP 服务器。 |
 | `output.http.listen.host` | string | `"127.0.0.1"` | 绑定主机。 |
