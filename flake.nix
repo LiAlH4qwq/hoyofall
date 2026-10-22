@@ -53,9 +53,6 @@
 
             hoyofall = pkgs.callPackage ./nix/package.nix {
               nodejs = pkgs.nodejs_26 or pkgs.nodejs;
-              # Pin the pnpm major: its store format changes between majors, which
-              # changes the fetchPnpmDeps hash. See nix/package.nix.
-              pnpm = pkgs.pnpm_12 or pkgs.pnpm;
             };
 
             tsnixAndroid = import ./nix/tsnix-android.nix {

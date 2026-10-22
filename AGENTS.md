@@ -299,10 +299,11 @@ No pre-release suffixes are used. The Android `versionCode` is derived as
   root flake reads it back lazily through `config.partitions.dev.extraInputs`,
   so it stays out of a consumer's `flake.lock`.
 - `nix/package.nix` builds with pnpm + rolldown. The pnpm store format changes
-  between pnpm majors, so `flake.nix` pins `pnpm_12` and the dependency hash
-  lives in a per-system `pnpmDepsHashes` map (with a `default`); refresh it when
-  `pnpm-lock.yaml` or the pnpm major changes by setting `lib.fakeHash`, building,
-  and copying the `got:` hash. See the comment in `nix/package.nix`.
+  between pnpm versions, so `nix/pnpm.nix` pins an exact pnpm version and the
+  dependency hash lives in a per-system `pnpmDepsHashes` map (with a `default`);
+  refresh it when `pnpm-lock.yaml` or the pinned pnpm version changes by setting
+  `lib.fakeHash`, building, and copying the `got:` hash. See the comment in
+  `nix/package.nix`.
 - `nix/module.nix` is **single-instance**: it generates `hoyofall.service` and
   validates `settings` against the shipped `schema.json` with
   `check-jsonschema`. It defaults `output.file.path` / `output.file.directory`

@@ -1,15 +1,17 @@
 {
   lib,
   stdenv,
+  callPackage,
   fetchPnpmDeps,
   pnpmConfigHook,
   pnpmBuildHook,
   makeWrapper,
   nodejs,
-  pnpm,
 }:
 
 let
+  pnpm = callPackage ./pnpm.nix { };
+
   # `fetchPnpmDeps` runs `pnpm install --force`, which fetches dependencies for
   # every platform, so its output is usually identical across systems; `default`
   # covers those. If a platform's store genuinely differs, add an override keyed
@@ -17,8 +19,8 @@ let
   #
   # To regenerate: set the value to `lib.fakeHash`, run `nix build .#hoyofall` on
   # that system, and copy the `got: sha256-…` value. Remember to do this when the
-  # pnpm major changes, since its store format is not stable across majors (we
-  # pin pnpm to a major in flake.nix for exactly this reason).
+  # pnpm version changes, since its store format is not stable across versions
+  # (we pin pnpm to an exact version in nix/pnpm.nix for exactly this reason).
   pnpmDepsHashes = {
     default = "sha256-BezhWar7w+CcLo97KpkEPH8UACTcr4lxY2opxoaOKXA=";
     # x86_64-linux = "sha256-…";
