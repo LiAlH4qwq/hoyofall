@@ -11,7 +11,7 @@ jobs:
           extra_nix_config: experimental-features = nix-command flakes
       - name: Build the flashable module
         run: nix build .#hoyofall-android --print-build-logs
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: result/hoyofall-android-arm64.zip
           generate_release_notes: "true"
